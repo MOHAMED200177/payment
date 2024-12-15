@@ -3,6 +3,6 @@ const router = express.Router();
 const customerController = require('../controllers/customerController');
 
 // Get customer statement
-router.get('/statement', customerController.getCustomerStatement);
+router.post('/statement', customerController.getCustomerStatement);
 
 module.exports = router;

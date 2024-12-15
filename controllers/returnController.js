@@ -1,24 +1,37 @@
 const Return = require('../models/return');
+const Customer = require('../models/customer');
 const Stock = require('../models/stock');
 const Invoice = require('../models/invoice');
 
 exports.addReturn = async (req, res) => {
     try {
-        const { invoiceId, productId, customerId, quantity, reason } = req.body;
+        const { invoiceId, productName, customerName, quantity, reason } = req.body;
+
+        const customer = await Customer.findOne({ name: customerName })
+        if (!customer) {
+            return res.status(404).json({ message: 'Customer not found' });
+        }
 
         const invoice = await Invoice.findById(invoiceId);
         if (!invoice) {
             return res.status(404).json({ message: 'Invoice not found' });
         }
 
-        const product = await Stock.findById(productId);
+        const product = await Stock.findOne({ product: productName });
         if (!product) {
             return res.status(404).json({ message: 'Product not found in stock' });
         }
 
-        if (quantity > product.quantity) {
+        const invoiceItem = invoice.items.find(item => item.product_id.toString() === product._id.toString());
+        if (!invoiceItem || quantity > invoiceItem.quantity) {
             return res.status(400).json({ message: 'Invalid return quantity' });
         }
+
+        const refundAmount = product.price * quantity;
+
+        customer.balance += refundAmount;
+        await customer.save();
+
 
         product.quantity += quantity;
         await product.save();
@@ -26,17 +39,27 @@ exports.addReturn = async (req, res) => {
 
         const newReturn = await Return.create({
             invoice: invoiceId,
-            customer: customerId,
-            product: productId,
+            customer: customer._id,
+            product: product._id,
             quantity,
             reason,
         });
 
 
         invoice.returns.push(newReturn._id);
+        invoice.refunds = (invoice.refunds || 0) + refundAmount;
+        invoice.total -= refundAmount;
         await invoice.save();
 
-        res.status(201).json({ message: 'Return added successfully', newReturn });
+        res.status(201).json({
+            message: 'Return added successfully',
+            invoice: invoice,
+            customer: customer,
+            product: product,
+            quantity,
+            reason,
+        });
+
     } catch (error) {
         res.status(500).json({ message: 'Error processing return', error });
     }
