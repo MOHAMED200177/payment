@@ -4,9 +4,10 @@ const Payment = require('../models/payment');
 const Customer = require('../models/customer');
 const Invoice = require('../models/invoice');
 const Stock = require('../models/stock');
+const Transaction = require('../models/transactions');
+const invoiceSchema = require('../schemas/invoice.schema');
 const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
-const invoiceSchema = require('../schemas/invoice.schema');
 
 // Create new invoice
 exports.createInvoice = catchAsync(async (req, res, next) => {
@@ -48,14 +49,31 @@ exports.createInvoice = catchAsync(async (req, res, next) => {
 
             calculatedTotal += product.price * item.quantity;
         }
-
+        const remaining = calculatedTotal - amount;
         // Create and save invoice
-        const invoice = new Invoice({ customer: customer._id, items: updatedItems, total: calculatedTotal, paid: amount });
+        const invoice = new Invoice({ customer: customer._id, items: updatedItems, total: calculatedTotal, paid: amount, remaining });
         await invoice.save({ session });
+
 
         // Create and save payment
         const payment = new Payment({ customer: customer._id, amount, invoice: invoice._id });
         await payment.save({ session });
+
+        const invoiceTransaction = await Transaction.create({
+            type: 'invoice',
+            referenceId: invoice._id,
+            amount: calculatedTotal,
+            details: `Invoice created with total ${calculatedTotal} for customer ${customer.name}`,
+            status: 'debit',
+        });
+
+        
+        customer.transactions.push(invoiceTransaction._id);
+        customer.invoice.push(invoice._id);
+        customer.payment.push(payment._id);
+        customer.outstandingBalance += remaining;
+        customer.balance += invoiceTotal;
+        await customer.save({ session });
 
         await session.commitTransaction();
         const populatedInvoice = await Invoice.findById(invoice.id).populate('customer', 'name');

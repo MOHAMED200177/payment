@@ -1,12 +1,13 @@
 const Payment = require('../models/payment');
 const Invoice = require('../models/invoice');
 const Customer = require('../models/customer');
+const Transaction = require('../models/transactions');
 
 exports.addPayment = async (req, res) => {
     try {
-        const { email, amount, invoiceId } = req.body;
+        const { name, amount, invoiceId } = req.body;
 
-        const customer = await Customer.findOne({ email });
+        const customer = await Customer.findOne({ name });
         if (!customer) {
             return res.status(404).json({ message: 'Customer not found' });
         }
@@ -25,8 +26,21 @@ exports.addPayment = async (req, res) => {
         }
 
         // Add payment
-        const payment = new Payment({ customer: customer.id, amount, invoice: invoiceId });
+        const payment = new Payment({ customer: customer.id, customerName: name, amount, invoice: invoiceId });
         await payment.save();
+
+        const transaction = await Transaction.create({
+            type: 'payment',
+            referenceId: invoice._id,
+            amount,
+            details: `Payment of ${amount} for invoice ${invoice._id}`,
+            status: 'credit',
+        });
+
+        customer.transactions.push(transaction._id)
+        customer.payment.push(payment._id);
+        customer.balance += amountPaid; 
+        await customer.save();
 
         // Update invoice's paid amount
         invoice.paid = (invoice.paid || 0) + amount;
@@ -44,6 +58,7 @@ exports.addPayment = async (req, res) => {
                 invoice: {
                     items: invoice.items,
                     total: invoice.total,
+
                     paid: invoice.paid,
                     status: invoice.status,
                 },

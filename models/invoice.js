@@ -14,6 +14,7 @@ const invoiceSchema = new mongoose.Schema({
     returns: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Return' }],
     total: { type: Number, required: true },
     paid: { type: Number, default: 0 },
+    remaining: { type: Number, required: true },
     status: { type: String, enum: ['Paid', 'Unpaid'] },
     refunds: { type: Number, default: 0 },
     date: { type: Date, default: Date.now },

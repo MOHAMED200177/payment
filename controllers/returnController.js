@@ -5,9 +5,9 @@ const Invoice = require('../models/invoice');
 
 exports.addReturn = async (req, res) => {
     try {
-        const { invoiceId, productName, customerName, quantity, reason } = req.body;
+        const { invoiceId, productName, name, quantity, reason } = req.body;
 
-        const customer = await Customer.findOne({ name: customerName })
+        const customer = await Customer.findOne({ name })
         if (!customer) {
             return res.status(404).json({ message: 'Customer not found' });
         }
@@ -30,7 +30,6 @@ exports.addReturn = async (req, res) => {
         const refundAmount = product.price * quantity;
 
         customer.balance += refundAmount;
-        await customer.save();
 
 
         product.quantity += quantity;
@@ -50,6 +49,20 @@ exports.addReturn = async (req, res) => {
         invoice.refunds = (invoice.refunds || 0) + refundAmount;
         invoice.total -= refundAmount;
         await invoice.save();
+
+        const refundTransaction = await Transaction.create({
+            type: 'return',
+            referenceId: returnItem._id,
+            amount: -refundAmount,
+            details: `Refund of ${refundAmount} for returned quantity of ${quantity} from invoice ${invoice._id}`,
+            status: 'debit',
+        });
+
+        customer.transactions.push(refundTransaction._id);
+        customer.returns.push(newReturn._id);
+        customer.balance += -refundAmount;
+        await customer.save();
+
 
         res.status(201).json({
             message: 'Return added successfully',

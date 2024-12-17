@@ -1,9 +1,14 @@
+const { string } = require('joi');
 const mongoose = require('mongoose');
 
 const paymentSchema = new mongoose.Schema({
     customer: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Customer',
+        required: true
+    },
+    customerName: {
+        type: string,
         required: true
     },
     invoice: {
