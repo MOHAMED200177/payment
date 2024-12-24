@@ -1,4 +1,3 @@
-const { string } = require('joi');
 const mongoose = require('mongoose');
 
 const paymentSchema = new mongoose.Schema({
@@ -8,7 +7,7 @@ const paymentSchema = new mongoose.Schema({
         required: true
     },
     customerName: {
-        type: string,
+        type: String,
         required: true
     },
     invoice: {

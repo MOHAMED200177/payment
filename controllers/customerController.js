@@ -1,36 +1,49 @@
-const Invoice = require('../models/invoice');
-const Payment = require('../models/payment');
 const Customer = require('../models/customer');
-const Return = require('../models/return');
+const Crud = require('./crudFactory');
+
+exports.allCustomer = Crud.getAll(Customer);
+exports.createCustomer = Crud.createOne(Customer);
+exports.updateCustomer = Crud.updateOne(Customer);
+exports.oneCustomer = Crud.getOne(Customer);
+exports.deleteCustomer = Crud.deleteOne(Customer);
 
 exports.getCustomerStatement = async (req, res) => {
     try {
         const { email } = req.body;
 
         // Fetch customer details
-        const customer = await Customer.findOne({ email });
+        const customer = await Customer.findOne({ email }).populate('transactions').lean();
         if (!customer) {
             return res.status(404).json({ message: 'Customer not found' });
         }
 
-        // Fetch invoices, payments, and returns for the customer
-        const invoices = await Invoice.find({ customer: customer._id }).lean();
-        const payments = await Payment.find({ customer: customer._id }).lean();
-        const returns = await Return.find({ customer: customer._id }).lean();
+        // Fetch transactions directly from customer
+        const transactions = customer.transactions;
 
         // Calculate totals
-        const totalInvoices = invoices.reduce((sum, invoice) => sum + invoice.total, 0);
-        const totalPayments = payments.reduce((sum, payment) => sum + payment.amount, 0);
-        const totalRefunds = invoices.reduce((sum, invoice) => sum + (invoice.refunds || 0), 0);
-        const balance = totalPayments - totalInvoices;
+        let totalDebit = 0; // Total amounts debited (e.g., invoices)
+        let totalCredit = 0; // Total amounts credited (e.g., payments, returns)
 
-        // Add detailed return information
-        const detailedReturns = returns.map(ret => ({
-            product: ret.product,
-            quantity: ret.quantity,
-            reason: ret.reason,
-            date: ret.createdAt,
-        }));
+        const transactionDetails = transactions.map(transaction => {
+            if (transaction.status === 'debit') {
+                totalDebit += transaction.amount;
+            } else if (transaction.status === 'credit') {
+                totalCredit += transaction.amount;
+            }
+
+            return {
+                id: transaction._id,
+                type: transaction.type,
+                referenceId: transaction.referenceId,
+                amount: transaction.amount,
+                details: transaction.details,
+                status: transaction.status,
+                date: transaction.createdAt,
+            };
+        });
+
+        // Calculate final balance
+        const balance = totalCredit - totalDebit;
 
         res.status(200).json({
             customer: {
@@ -39,25 +52,11 @@ exports.getCustomerStatement = async (req, res) => {
                 phone: customer.phone,
             },
             totals: {
-                totalInvoices,
-                totalPayments,
-                totalRefunds,
+                totalDebit,
+                totalCredit,
                 balance,
             },
-            invoices: invoices.map(invoice => ({
-                id: invoice._id,
-                total: invoice.total,
-                paid: invoice.paid,
-                refunds: invoice.refunds || 0,
-                status: invoice.status,
-                date: invoice.createdAt,
-            })),
-            payments: payments.map(payment => ({
-                id: payment._id,
-                amount: payment.amount,
-                date: payment.createdAt,
-            })),
-            returns: detailedReturns,
+            transactions: transactionDetails,
         });
     } catch (error) {
         res.status(500).json({ message: error.message });

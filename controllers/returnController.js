@@ -2,6 +2,12 @@ const Return = require('../models/return');
 const Customer = require('../models/customer');
 const Stock = require('../models/stock');
 const Invoice = require('../models/invoice');
+const Crud = require('./crudFactory');
+
+exports.allReturn = Crud.getAll(Return);
+exports.updateReturn = Crud.updateOne(Return);
+exports.oneReturn = Crud.getOne(Return);
+exports.deleteReturn = Crud.deleteOne(Return);
 
 exports.addReturn = async (req, res) => {
     try {
@@ -29,7 +35,7 @@ exports.addReturn = async (req, res) => {
 
         const refundAmount = product.price * quantity;
 
-        customer.balance += refundAmount;
+        customer.balance -= refundAmount;
 
 
         product.quantity += quantity;
@@ -48,6 +54,7 @@ exports.addReturn = async (req, res) => {
         invoice.returns.push(newReturn._id);
         invoice.refunds = (invoice.refunds || 0) + refundAmount;
         invoice.total -= refundAmount;
+        invoice.remaining -= refundAmount;
         await invoice.save();
 
         const refundTransaction = await Transaction.create({

@@ -9,6 +9,13 @@ const invoiceSchema = require('../schemas/invoice.schema');
 const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
 
+
+exports.allInvoives = Crud.getAll(Invoice);
+exports.updateInvoice = Crud.updateOne(Invoice);
+exports.oneInvoice = Crud.getOne(Invoice);
+exports.deleteInvoice = Crud.deleteOne(Invoice);
+
+
 // Create new invoice
 exports.createInvoice = catchAsync(async (req, res, next) => {
     const session = await mongoose.startSession();
@@ -19,7 +26,7 @@ exports.createInvoice = catchAsync(async (req, res, next) => {
         const { error, value } = invoiceSchema.validate(req.body);
         if (error) throw new AppError(error.details[0].message, 400);
 
-        const { name, email, phone, items, amount } = value;
+        const { name, email, phone, items, amount, discount } = value;
 
         // Find or create customer
         const customer = await Customer.findOneAndUpdate(
@@ -49,30 +56,69 @@ exports.createInvoice = catchAsync(async (req, res, next) => {
 
             calculatedTotal += product.price * item.quantity;
         }
-        const remaining = calculatedTotal - amount;
+        let discountAmount = 0;
+
+        if (discount) {
+
+            discountAmount = calculatedTotal * (discount / 100); // Calculate discount amount
+
+        }
+
+
+        const totalAfterDiscount = calculatedTotal - discountAmount; // Total after discount
+
+        const remaining = totalAfterDiscount - amount;
+
+
         // Create and save invoice
-        const invoice = new Invoice({ customer: customer._id, items: updatedItems, total: calculatedTotal, paid: amount, remaining });
+
+        const invoice = new Invoice({
+
+            customer: customer._id,
+
+            items: updatedItems,
+
+            total: totalAfterDiscount,
+
+            paid: amount,
+
+            remaining,
+
+            discount: discountAmount,
+
+        });
+
         await invoice.save({ session });
 
 
         // Create and save payment
-        const payment = new Payment({ customer: customer._id, amount, invoice: invoice._id });
+        const payment = new Payment({ customer: customer._id, customerName: name, amount, invoice: invoice._id });
         await payment.save({ session });
 
-        const invoiceTransaction = await Transaction.create({
-            type: 'invoice',
-            referenceId: invoice._id,
-            amount: calculatedTotal,
-            details: `Invoice created with total ${calculatedTotal} for customer ${customer.name}`,
-            status: 'debit',
-        });
+        const invoiceTransaction = await Transaction.create(
+            {
+                type: 'invoice',
+                referenceId: invoice._id,
+                amount: calculatedTotal,
+                details: `Invoice created with total ${calculatedTotal} for customer ${customer.name}`,
+                status: 'debit',
+            },
+            {
+                type: 'payment',
+                referenceId: invoice._id,
+                amount,
+                details: `Payment of ${amount} for invoice ${invoice._id}`,
+                status: 'credit',
+            }
+        );
 
-        
+
         customer.transactions.push(invoiceTransaction._id);
         customer.invoice.push(invoice._id);
         customer.payment.push(payment._id);
         customer.outstandingBalance += remaining;
-        customer.balance += invoiceTotal;
+        customer.balance += totalAfterDiscount;
+        customer.balance -= amount;
         await customer.save({ session });
 
         await session.commitTransaction();

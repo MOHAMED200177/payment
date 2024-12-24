@@ -6,7 +6,7 @@ const transactionSchema = new mongoose.Schema({
     amount: Number,
     date: { type: Date, default: Date.now },
     details: String,
-    status: { type: String, enum: ['debit', 'cradit'], require: true },
+    status: { type: String, enum: ['debit', 'credit'], require: true },
 });
 
 const Transaction = mongoose.model('Transaction', transactionSchema);

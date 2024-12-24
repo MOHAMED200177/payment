@@ -1,7 +1,15 @@
 const Payment = require('../models/payment');
 const Invoice = require('../models/invoice');
 const Customer = require('../models/customer');
+const Crud = require('./crudFactory');
 const Transaction = require('../models/transactions');
+
+
+exports.allPayment = Crud.getAll(Payment);
+exports.updatePayment = Crud.updateOne(Payment);
+exports.onePayment = Crud.getOne(Payment);
+exports.deletePayment = Crud.deleteOne(Payment);
+
 
 exports.addPayment = async (req, res) => {
     try {
@@ -39,11 +47,12 @@ exports.addPayment = async (req, res) => {
 
         customer.transactions.push(transaction._id)
         customer.payment.push(payment._id);
-        customer.balance += amountPaid; 
+        customer.balance -= amountPaid;
         await customer.save();
 
         // Update invoice's paid amount
         invoice.paid = (invoice.paid || 0) + amount;
+        invoice.remaining -= amount
         await invoice.save();
 
         res.status(201).json({

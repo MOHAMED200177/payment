@@ -23,7 +23,6 @@ const InvoiceForm = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        // التحقق من صحة البيانات
         if (!name || !email || !phone || amount <= 0 || items.length === 0 || items.some(item => !item.product || item.quantity <= 0)) {
             alert("Please fill in all fields correctly.");
             return;
@@ -59,71 +58,74 @@ const InvoiceForm = () => {
         }
     };
 
-
     return (
-        <div>
-            <form onSubmit={handleSubmit}>
-                <input
-                    type="text"
-                    placeholder="Name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                />
-                <input
-                    type="email"
-                    placeholder="Email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                />
-                <input
-                    type="text"
-                    placeholder="Phone"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    required
-                />
-                {items.map((item, index) => (
-                    <div key={index}>
-                        <input
-                            type="text"
-                            placeholder="Product"
-                            value={item.product}
-                            onChange={(e) => handleItemChange(index, 'product', e.target.value)}
-                            required
-                        />
-                        <input
-                            type="number"
-                            placeholder="Quantity"
-                            value={item.quantity}
-                            onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                            required
-                        />
-                    </div>
-                ))}
-                <button type="button" onClick={handleAddItem}>Add Item</button>
-                <input
-                    type="number"
-                    placeholder="Amount"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    required
-                />
-                <button type="submit">Create Invoice</button>
-            </form>
+        <>
+            <div className="title">
+                <h1 className="invoice-title">Invoice</h1>
+            </div>
+            <div className="invoice-form-container">
+                <form onSubmit={handleSubmit} className="invoice-form">
+                    <input
+                        type="text"
+                        placeholder="Name"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        required
+                    />
+                    <input
+                        type="email"
+                        placeholder="Email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                    />
+                    <input
+                        type="text"
+                        placeholder="Phone"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        required
+                    />
+                    {items.map((item, index) => (
+                        <div key={index} className="item-inputs">
+                            <input
+                                type="text"
+                                placeholder="Product"
+                                value={item.product}
+                                onChange={(e) => handleItemChange(index, 'product', e.target.value)}
+                                required
+                            />
+                            <input
+                                type="number"
+                                placeholder="Quantity"
+                                value={item.quantity}
+                                onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                                required
+                            />
+                        </div>
+                    ))}
+                    <button type="button" onClick={handleAddItem} className="add-item-btn">Add Item</button>
+                    <input
+                        type="number"
+                        placeholder="Amount"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        required
+                    />
+                    <button type="submit" className="submit-btn">Create Invoice</button>
+                </form>
 
-            {responseMessage && (
-                <div>
-                    <h3>Response:</h3>
-                    <h4>{responseMessage.message}</h4>
-                    {responseMessage.invoice && (
-                        <div>
-                            <h5>Invoice Details:</h5>
+                {responseMessage && responseMessage.invoice && (
+                    <div className="invoice-details-container">
+                        <h3>Invoice Created Successfully</h3>
+                        <div className="invoice-details">
+                            <h4>Invoice ID: {responseMessage.invoice._id}</h4>
                             <p><strong>Customer Name:</strong> {responseMessage.invoice.customer.name}</p>
-                            <p><strong>Invoice ID:</strong> {responseMessage.invoice._id}</p>
                             <p><strong>Date:</strong> {new Date(responseMessage.invoice.date).toLocaleString()}</p>
                             <p><strong>Status:</strong> {responseMessage.invoice.status}</p>
+                        </div>
+
+                        <div className="items-list">
                             <h5>Items:</h5>
                             <ul>
                                 {responseMessage.invoice.items.map((item) => (
@@ -132,14 +134,17 @@ const InvoiceForm = () => {
                                     </li>
                                 ))}
                             </ul>
+                        </div>
+
+                        <div className="total-amount">
                             <p><strong>Total Amount:</strong> ${responseMessage.invoice.total.toFixed(2)}</p>
                             <p><strong>Amount Paid:</strong> ${responseMessage.invoice.paid.toFixed(2)}</p>
                             <p><strong>Refunds:</strong> ${responseMessage.invoice.refunds.toFixed(2)}</p>
                         </div>
-                    )}
-                </div>
-            )}
-        </div>
+                    </div>
+                )}
+            </div>
+        </>
     );
 };
 

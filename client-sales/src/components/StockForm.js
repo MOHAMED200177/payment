@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import './css/stockForm.css';
+
 
 const StockForm = ({ onStockCreated }) => {
     const [product, setProduct] = useState('');
@@ -17,28 +19,32 @@ const StockForm = ({ onStockCreated }) => {
     };
 
     return (
-        <div>
-            <h2>Create Stock</h2>
-            <input
-                type="text"
-                value={product}
-                onChange={(e) => setProduct(e.target.value)}
-                placeholder="Product"
-            />
-            <input
-                type="number"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                placeholder="Quantity"
-            />
-            <input
-                type="number"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                placeholder="Price"
-            />
-            <button onClick={createStock}>Create Stock Item</button>
-        </div>
+        <>
+            <div className="title">
+                <h1>Create Stock</h1>
+            </div>
+            <div className="container">
+                <input
+                    type="text"
+                    value={product}
+                    onChange={(e) => setProduct(e.target.value)}
+                    placeholder="Product"
+                />
+                <input
+                    type="number"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    placeholder="Quantity"
+                />
+                <input
+                    type="number"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    placeholder="Price"
+                />
+                <button onClick={createStock}>Create Stock Item</button>
+            </div>
+        </>
     );
 };
 

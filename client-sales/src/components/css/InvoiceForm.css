@@ -1,77 +1,91 @@
-/* src/css/InvoiceForm.css */
-
-body {
-    font-family: Arial, sans-serif;
-    background-color: #f4f4f4;
-    margin: 0;
+/* Overall container for the invoice form */
+.form-container {
+    width: 80%;
+    margin: 0 auto;
     padding: 20px;
+    background-color: #ffffff;
+    border-radius: 50px;
+    box-shadow: -14px 20px 20px 6px rgba(103, 101, 223, 0.1);
 }
 
-form {
-    background-color: white;
-    padding: 20px;
-    border-radius: 5px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-    margin-bottom: 20px;
-}
-
-h3 {
-    color: #333;
-}
-
-input[type="text"],
-input[type="email"],
-input[type="number"],
-button {
+/* Styling for the form inputs */
+.form input {
     width: 100%;
-    padding: 10px;
-    margin: 10px 0;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-}
-
-button {
-    background-color: #5cb85c;
-    color: white;
-    border: none;
-    cursor: pointer;
-}
-
-button:hover {
-    background-color: #4cae4c;
-}
-
-.response {
-    background-color: #dff0d8;
-    border: 1px solid #d6e9c6;
-    color: #3c763d;
     padding: 20px;
-    border-radius: 5px;
-    margin-top: 20px;
+    margin-bottom: 15px;
+    border: 3px solid #030730;
+    border-radius: 40px;
+    font-size: 16px;
 }
 
-.response h4 {
-    margin: 0;
+/* Button styling for adding items and submitting the form */
+.add-item-btn,
+.submit-btn {
+    background-color: #000000;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 16px;
+    margin-bottom: 4px;
 }
 
-.response h5 {
-    margin-top: 10px;
+.add-item-btn:hover,
+.submit-btn:hover {
+    background-color: #100349;
+    border: 3px solid rgb(65, 0, 245);
+}
+
+/* Styling for the added item input fields */
+.item-inputs {
+    display: flex;
+    gap: 10px;
+}
+
+.item-inputs input {
+    width: 45%;
+}
+
+/* Container for the invoice details */
+.details-container {
+    margin-top: 40px;
+    padding: 20px;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Styling for invoice details */
+.details h4 {
+    font-size: 20px;
     color: #333;
 }
 
-.response ul {
+.invoice-details p {
+    font-size: 16px;
+    margin: 5px 0;
+}
+
+/* List styling for items in the invoice */
+.items-list ul {
     list-style-type: none;
     padding: 0;
 }
 
-.response ul li {
-    padding: 5px 0;
-    border-bottom: 1px solid #610000;
+.items-list li {
+    padding: 8px;
+    border-bottom: 1px solid #eee;
 }
 
-.response .total {
+/* Total amount section styling */
+.total-amount {
+    margin-top: 20px;
+}
+
+.total-amount p {
+    font-size: 16px;
+    margin: 5px 0;
     font-weight: bold;
-    font-size: 1.2em;
-    margin-top: 10px;
-    text-align: right;
+    color: #333;
 }
