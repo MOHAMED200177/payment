@@ -19,15 +19,22 @@ const CustomerStatement = () => {
     };
 
     return (
-        <div>
-            <h2>Customer Statement</h2>
-            <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter Customer Email"
-            />
-            <button onClick={fetchCustomerStatement}>Get Statement</button>
+        <>
+            <div className="title">
+                <h2>Customer Statement</h2>
+            </div>
+            <div className="form-container">
+                <form className="form">
+                    <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="Enter Customer Email"
+                    />
+                    <button onClick={fetchCustomerStatement} className="submit-btn">Get Statement</button>
+                </form>
+            </div>
+
 
             {error && <p style={{ color: 'red' }}>{error}</p>}
 
@@ -72,7 +79,7 @@ const CustomerStatement = () => {
                     </ul>
                 </div>
             )}
-        </div>
+        </>
     );
 };
 

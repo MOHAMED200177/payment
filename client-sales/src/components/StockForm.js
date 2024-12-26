@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import './css/stockForm.css';
+import './css/Form.css';
 
 
 const StockForm = ({ onStockCreated }) => {
@@ -23,26 +23,28 @@ const StockForm = ({ onStockCreated }) => {
             <div className="title">
                 <h1>Create Stock</h1>
             </div>
-            <div className="container">
-                <input
-                    type="text"
-                    value={product}
-                    onChange={(e) => setProduct(e.target.value)}
-                    placeholder="Product"
-                />
-                <input
-                    type="number"
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    placeholder="Quantity"
-                />
-                <input
-                    type="number"
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
-                    placeholder="Price"
-                />
-                <button onClick={createStock}>Create Stock Item</button>
+            <div className="form-container">
+                <form className="form">
+                    <input
+                        type="text"
+                        value={product}
+                        onChange={(e) => setProduct(e.target.value)}
+                        placeholder="Product"
+                    />
+                    <input
+                        type="number"
+                        value={quantity}
+                        onChange={(e) => setQuantity(e.target.value)}
+                        placeholder="Quantity"
+                    />
+                    <input
+                        type="number"
+                        value={price}
+                        onChange={(e) => setPrice(e.target.value)}
+                        placeholder="Price"
+                    />
+                    <button onClick={createStock} className="submit-btn">Create Stock Item</button>
+                </form>
             </div>
         </>
     );

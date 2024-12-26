@@ -1,7 +1,7 @@
-/* Variables */
 :root {
   /* Colors */
   --color-primary: #0a0f4d;
+  --color-btn: #00021f;
   --color-secondary: #2e0392;
   --color-accent: #5c38a0;
   --color-black: #090018;
@@ -64,14 +64,15 @@ body {
 
 /* Layout Containers */
 .app-container {
-  display: grid;
-  align-content: center;
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   padding: 0;
   background-color: var(--color-black);
   width: 100%;
-  height: 100vh;
+  min-height: 100vh;
   position: relative;
+  justify-content: flex-start;
   flex-grow: 1;
 }
 
@@ -80,26 +81,30 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  position: absolute;
-  top: 0;
-  width: 100%;
-  height: 95px;
+  position: relative;
+  width: 100vw;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
   font-family: var(--font-family-title);
-  font-size: var(--font-size-x-large);
+  font-size: var(--font-size-large);
   font-weight: var(--font-weight-bold);
   color: var(--color-primary);
+  padding: 10px 0;
+  z-index: 10;
 }
-
 
 .grid-container {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
-  width: 100%;
-  padding: 120px 20px 20px;
-  height: calc(100% - 95px);
   justify-content: center;
+  align-items: center;
+  align-content: center;
+  gap: 20px;
+  padding: 100px 20px 120px;
+  height: auto;
+  justify-content: center;
+  width: 100%;
+  overflow: auto;
+  flex-grow: 1;
 }
 
 /* Grid Items */
@@ -131,11 +136,12 @@ body {
   color: var(--color-white);
   text-align: center;
   padding: 20px;
-  position: fixed;
-  bottom: 0;
+  position: relative;
   width: 100%;
   font-size: var(--font-size-small);
   font-weight: var(--font-weight-regular);
+  margin-top: auto;
+  /* يتأكد من أن الفوتر في الأسفل دائمًا */
 }
 
 .footer p {
@@ -145,7 +151,8 @@ body {
 /* Responsive Styles */
 @media (max-width: 768px) {
   .grid-container {
-    padding: 100px 10px 10px;
+    padding: 80px 10px 10px;
+    /* تحسين المسافة لتناسب الشاشات الصغيرة */
   }
 
   .grid-item {
@@ -154,6 +161,7 @@ body {
   }
 
   .title {
-    font-size: var(--font-size-large);
+    font-size: var(--font-size-medium);
+    /* تقليل الحجم في الشاشات الصغيرة */
   }
 }

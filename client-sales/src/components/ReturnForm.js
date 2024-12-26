@@ -1,6 +1,7 @@
 // src/components/ReturnForm.js
 import React, { useState } from 'react';
 import axios from 'axios';
+import './css/Form.css';
 
 const ReturnForm = ({ onReturnAdded }) => {
     const [invoiceId, setInvoiceId] = useState('');
@@ -11,7 +12,7 @@ const ReturnForm = ({ onReturnAdded }) => {
 
     const addReturn = async () => {
         try {
-            await axios.post('http://localhost:8000/return/add',{
+            await axios.post('http://localhost:8000/return/add', {
                 invoiceId,
                 productName,
                 customerName,
@@ -27,40 +28,47 @@ const ReturnForm = ({ onReturnAdded }) => {
     };
 
     return (
-        <div>
-            <h2>Add Return</h2>
-            <input
-                type="text"
-                value={invoiceId}
-                onChange={(e) => setInvoiceId(e.target.value)}
-                placeholder="Invoice ID"
-            />
-            <input
-                type="text"
-                value={productName}
-                onChange={(e) => setProductName(e.target.value)}
-                placeholder="Product Name"
-            />
-            <input
-                type="text"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="Customer Name"
-            />
-            <input
-                type="number"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                placeholder="Quantity"
-            />
-            <input
-                type="text"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="Reason for Return"
-            />
-            <button onClick={addReturn}>Add Return</button>
-        </div>
+        <>
+            <div className="title">
+                <h2>Create Return</h2>
+            </div>
+            <div className="form-container">
+                <form className="form">
+
+                    <input
+                        type="text"
+                        value={invoiceId}
+                        onChange={(e) => setInvoiceId(e.target.value)}
+                        placeholder="Invoice ID"
+                    />
+                    <input
+                        type="text"
+                        value={productName}
+                        onChange={(e) => setProductName(e.target.value)}
+                        placeholder="Product Name"
+                    />
+                    <input
+                        type="text"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        placeholder="Customer Name"
+                    />
+                    <input
+                        type="number"
+                        value={quantity}
+                        onChange={(e) => setQuantity(e.target.value)}
+                        placeholder="Quantity"
+                    />
+                    <input
+                        type="text"
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value)}
+                        placeholder="Reason for Return"
+                    />
+                    <button onClick={addReturn} className="submit-btn">Add Return</button>
+                </form>
+            </div>
+        </>
     );
 };
 

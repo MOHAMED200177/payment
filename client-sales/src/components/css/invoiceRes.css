@@ -1,0 +1,102 @@
+/* إعدادات الأنماط الرئيسية */
+.details-container {
+    position: fixed;
+    top: 0;
+    right: -100%;
+    /* الفاتورة تبدأ من خارج الشاشة على الجنب */
+    width: 60%;
+    /* عرض الفاتورة 60% من الشاشة */
+    height: 100vh;
+    /* الفاتورة تأخذ طول الشاشة بالكامل */
+    padding: 30px;
+    background-color: #fff;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    /* تأثير الظل */
+    border-radius: 15px;
+    z-index: 9999;
+    opacity: 0;
+    /* الفاتورة غير مرئية في البداية */
+    transform: translateX(100%);
+    /* تبدأ الفاتورة خارج الشاشة */
+    transition: transform 1s ease-in-out, opacity 1s ease-in-out;
+    /* تأثير الانزلاق والتلاشي */
+}
+
+/* عند ظهور الفاتورة */
+.details-container.show {
+    right: 0;
+    /* الفاتورة تظهر بالقرب من الجنب الأيمن */
+    opacity: 1;
+    /* تظهر الفاتورة بشكل كامل */
+    transform: translateX(0);
+    /* الفاتورة تتحرك من الجنب الأيمن إلى مكانها */
+}
+
+/* تفاصيل الفاتورة */
+.details h3 {
+    font-size: 32px;
+    font-weight: bold;
+    margin-bottom: 20px;
+    color: #333;
+    /* النصوص باللون الداكن */
+    text-align: center;
+    /* محاذاة النص إلى المنتصف */
+}
+
+.details p {
+    font-size: 18px;
+    line-height: 1.6;
+    margin-bottom: 15px;
+    color: #555;
+    /* نص بلون أفتح */
+}
+
+.items-list ul {
+    list-style-type: none;
+    padding: 0;
+    margin-top: 20px;
+}
+
+.items-list li {
+    font-size: 18px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #eee;
+    color: #444;
+}
+
+.total-amount p {
+    font-size: 20px;
+    margin-top: 25px;
+    color: #333;
+    /* النص بلون داكن */
+    font-weight: bold;
+}
+
+/* تحسين تصميم الفاتورة بشكل كامل */
+.details-container h3,
+.items-list,
+.total-amount {
+    border-bottom: 2px solid #eee;
+    padding-bottom: 20px;
+    margin-bottom: 20px;
+}
+
+/* الأنماط الخاصة بالـ "Close" */
+.close-btn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background-color: #ff4d4d;
+    color: #fff;
+    border: none;
+    padding: 14px 18px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 22px;
+    transition: background-color 0.3s ease;
+}
+
+.close-btn:hover {
+    background-color: #ff3333;
+}
