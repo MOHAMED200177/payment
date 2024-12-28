@@ -11,18 +11,20 @@ exports.getCustomerStatement = async (req, res) => {
     try {
         const { email } = req.body;
 
+        if (!email) {
+            return res.status(400).json({ message: 'Email is required' });
+        }
+
         // Fetch customer details
         const customer = await Customer.findOne({ email }).populate('transactions').lean();
         if (!customer) {
             return res.status(404).json({ message: 'Customer not found' });
         }
 
-        // Fetch transactions directly from customer
-        const transactions = customer.transactions;
+        const transactions = customer.transactions || [];
 
-        // Calculate totals
-        let totalDebit = 0; // Total amounts debited (e.g., invoices)
-        let totalCredit = 0; // Total amounts credited (e.g., payments, returns)
+        let totalDebit = 0;
+        let totalCredit = 0;
 
         const transactionDetails = transactions.map(transaction => {
             if (transaction.status === 'debit') {
@@ -42,7 +44,6 @@ exports.getCustomerStatement = async (req, res) => {
             };
         });
 
-        // Calculate final balance
         const balance = totalCredit - totalDebit;
 
         res.status(200).json({
@@ -59,6 +60,7 @@ exports.getCustomerStatement = async (req, res) => {
             transactions: transactionDetails,
         });
     } catch (error) {
+        console.error('Error fetching customer statement:', error);
         res.status(500).json({ message: error.message });
     }
 };

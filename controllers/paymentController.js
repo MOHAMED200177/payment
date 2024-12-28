@@ -47,7 +47,7 @@ exports.addPayment = async (req, res) => {
 
         customer.transactions.push(transaction._id)
         customer.payment.push(payment._id);
-        customer.balance -= amountPaid;
+        customer.balance -= amount;
         await customer.save();
 
         // Update invoice's paid amount

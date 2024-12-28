@@ -10,10 +10,10 @@ const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
 
 
-exports.allInvoives = Crud.getAll(Invoice);
-exports.updateInvoice = Crud.updateOne(Invoice);
-exports.oneInvoice = Crud.getOne(Invoice);
-exports.deleteInvoice = Crud.deleteOne(Invoice);
+// exports.allInvoives = Crud.getAll(Invoice);
+// exports.updateInvoice = Crud.updateOne(Invoice);
+// exports.oneInvoice = Crud.getOne(Invoice);
+// exports.deleteInvoice = Crud.deleteOne(Invoice);
 
 
 // Create new invoice
@@ -65,8 +65,12 @@ exports.createInvoice = catchAsync(async (req, res, next) => {
         }
 
 
-        const totalAfterDiscount = calculatedTotal - discountAmount; // Total after discount
+        const totalAfterDiscount = calculatedTotal - discountAmount;
 
+        if (amount > totalAfterDiscount) {
+            throw new AppError(`Payment amount (${amount}) exceeds total invoice amount (${totalAfterDiscount})`, 400);
+        }
+        
         const remaining = totalAfterDiscount - amount;
 
 
@@ -95,7 +99,7 @@ exports.createInvoice = catchAsync(async (req, res, next) => {
         const payment = new Payment({ customer: customer._id, customerName: name, amount, invoice: invoice._id });
         await payment.save({ session });
 
-        const invoiceTransaction = await Transaction.create(
+        const invoiceTransaction = await Transaction.insertMany([
             {
                 type: 'invoice',
                 referenceId: invoice._id,
@@ -110,10 +114,12 @@ exports.createInvoice = catchAsync(async (req, res, next) => {
                 details: `Payment of ${amount} for invoice ${invoice._id}`,
                 status: 'credit',
             }
-        );
+        ]);
 
+        invoiceTransaction.forEach((transaction) => {
+            customer.transactions.push(transaction._id);
+        });
 
-        customer.transactions.push(invoiceTransaction._id);
         customer.invoice.push(invoice._id);
         customer.payment.push(payment._id);
         customer.outstandingBalance += remaining;

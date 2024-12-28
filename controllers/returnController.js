@@ -2,6 +2,7 @@ const Return = require('../models/return');
 const Customer = require('../models/customer');
 const Stock = require('../models/stock');
 const Invoice = require('../models/invoice');
+const Transaction = require('../models/transactions');
 const Crud = require('./crudFactory');
 
 exports.allReturn = Crud.getAll(Return);
@@ -43,7 +44,7 @@ exports.addReturn = async (req, res) => {
 
 
         const newReturn = await Return.create({
-            invoice: invoiceId,
+            invoice: invoice._id,
             customer: customer._id,
             product: product._id,
             quantity,
@@ -59,7 +60,7 @@ exports.addReturn = async (req, res) => {
 
         const refundTransaction = await Transaction.create({
             type: 'return',
-            referenceId: returnItem._id,
+            referenceId: newReturn._id,
             amount: -refundAmount,
             details: `Refund of ${refundAmount} for returned quantity of ${quantity} from invoice ${invoice._id}`,
             status: 'debit',

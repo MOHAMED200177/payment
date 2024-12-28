@@ -8,6 +8,7 @@ const customerSchema = new mongoose.Schema({
     phone: { type: String, required: true },
     balance: { type: String, required: true, default: 0 },
     outstandingBalance: { type: Number, default: 0 },
+    cash: { type: Number, default: 0 },
     invoice: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Invoice' }],
     returns: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Return' }],
     payment: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Payment' }],

@@ -81,8 +81,82 @@
     padding-bottom: 20px;
     margin-bottom: 20px;
 }
+.details-container {
+    position: fixed;
+    top: 0;
+    right: -100%;
+    width: 60%;
+    height: 100vh;
+    padding: 30px;
+    background-color: #fff;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    border-radius: 15px;
+    z-index: 9999;
+    opacity: 0;
+    transform: translateX(100%);
+    transition: transform 1s ease-in-out, opacity 1s ease-in-out;
+    overflow-y: auto;
+    /* يضيف شريط تمرير عند زيادة المحتوى */
+    display: flex;
+    flex-direction: column;
+    /* ترتيب العناصر بشكل عمودي */
+    justify-content: space-between;
+    /* ضمان توزيع المحتوى */
+}
 
-/* الأنماط الخاصة بالـ "Close" */
+/* عند ظهور الفاتورة */
+.details-container.show {
+    right: 0;
+    opacity: 1;
+    transform: translateX(0);
+}
+
+/* تحسين التفاصيل */
+.details h3 {
+    font-size: 32px;
+    font-weight: bold;
+    margin-bottom: 20px;
+    color: #333;
+    text-align: center;
+}
+
+.details p {
+    font-size: 18px;
+    line-height: 1.6;
+    margin-bottom: 15px;
+    color: #555;
+    word-wrap: break-word;
+    /* منع النصوص الطويلة من تجاوز حدود العنصر */
+}
+
+/* تحسين قائمة العناصر */
+.items-list ul {
+    list-style-type: none;
+    padding: 0;
+    margin-top: 20px;
+    max-height: 50%;
+    /* يحد من ارتفاع القائمة */
+    overflow-y: auto;
+    /* شريط تمرير للقائمة عند الحاجة */
+}
+
+.items-list li {
+    font-size: 18px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #eee;
+    color: #444;
+}
+
+/* تحسين المجموع الكلي */
+.total-amount p {
+    font-size: 20px;
+    margin-top: 25px;
+    color: #333;
+    font-weight: bold;
+}
+
+/* تحسين الزر "Close" */
 .close-btn {
     position: absolute;
     top: 20px;
@@ -99,4 +173,26 @@
 
 .close-btn:hover {
     background-color: #ff3333;
+}
+
+/* تحسين رسالة الخطأ */
+.error-message {
+    background-color: #ffebee;
+    border: 1px solid #ef5350;
+    border-radius: 4px;
+    padding: 15px;
+    margin: 10px 0;
+    position: relative;
+    color: #c62828;
+}
+
+.error-message .close-btn {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    color: #c62828;
 }

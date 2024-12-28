@@ -12,22 +12,34 @@ const InvoiceForm = () => {
     const [discount, setDiscount] = useState(0);
     const [responseMessage, setResponseMessage] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
 
     const handleAddItem = () => {
         setItems([...items, { product: '', quantity: 1 }]);
     };
 
     const handleItemChange = (index, field, value) => {
-        const newItems = [...items];
-        newItems[index][field] = value;
-        setItems(newItems);
+        const updatedItems = [...items];
+        updatedItems[index][field] = value;
+        setItems(updatedItems);
+    };
+
+    const resetForm = () => {
+        setName('');
+        setEmail('');
+        setPhone('');
+        setItems([{ product: '', quantity: 1 }]);
+        setAmount(0);
+        setDiscount(0);
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setError(null);
+        setResponseMessage(null);
 
         if (!name || !email || !phone || amount <= 0 || items.length === 0 || items.some(item => !item.product || item.quantity <= 0)) {
-            alert('Please fill in all fields correctly.');
+            setError('Please fill all fields correctly');
             return;
         }
 
@@ -44,22 +56,18 @@ const InvoiceForm = () => {
 
         try {
             const response = await axios.post('http://localhost:8000/invoices/create', invoiceData);
-            setResponseMessage(response.data);
-            setLoading(false); // إيقاف التحميل بعد استلام الرد
-        } catch (error) {
-            console.error('Error creating invoice:', error);
-            setLoading(false); // إيقاف التحميل في حالة وجود خطأ
-            if (error.response) {
-                setResponseMessage({
-                    message: 'Error creating invoice',
-                    error: error.response.data,
-                });
-            } else {
-                setResponseMessage({
-                    message: 'Error creating invoice',
-                    error: error.message,
-                });
+
+            if (response.data) {
+                setResponseMessage(response.data);
+                resetForm();
             }
+        } catch (error) {
+            console.error('Error:', error.response || error.message);
+            setError(
+                error.response?.data?.message || 'Failed to create invoice'
+            );
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -102,20 +110,18 @@ const InvoiceForm = () => {
                     </div>
                     {items.map((item, index) => (
                         <div key={index} className="item-inputs">
-                            <label htmlFor={`product-${index}`}>Product</label>
+                            <label htmlFor="Product">Product</label>
                             <input
                                 type="text"
-                                id={`product-${index}`}
                                 value={item.product}
                                 onChange={(e) => handleItemChange(index, 'product', e.target.value)}
                                 required
                             />
-                            <label htmlFor={`quantity-${index}`}>Quantity</label>
+                            <label>Quantity</label>
                             <input
                                 type="number"
-                                id={`quantity-${index}`}
                                 value={item.quantity}
-                                onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                                onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value))}
                                 required
                             />
                         </div>
@@ -129,7 +135,7 @@ const InvoiceForm = () => {
                             type="number"
                             id="amount"
                             value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
+                            onChange={(e) => setAmount(parseFloat(e.target.value))}
                             required
                         />
                     </div>
@@ -139,48 +145,73 @@ const InvoiceForm = () => {
                             type="number"
                             id="discount"
                             value={discount}
-                            onChange={(e) => setDiscount(e.target.value)}
+                            onChange={(e) => setDiscount(parseFloat(e.target.value))}
                             required
                         />
                     </div>
-                    <button type="submit" className="submit-btn">
-                        Create Invoice
+                    <button type="submit" className="submit-btn" disabled={loading}>
+                        {loading ? 'Creating...' : 'Create Invoice'}
                     </button>
                 </form>
 
-                {loading && (
-                    <div className="loading-animation">
-                        <p>Loading...</p>
+                {loading && <p>Loading...</p>}
+
+                {error && (
+                    <div className="error-message">
+                        <button onClick={() => setError(null)} className="close-btn">×</button>
+                        <p>{error}</p>
                     </div>
                 )}
 
                 {responseMessage && responseMessage.invoice && (
-                    <div className={`details-container ${responseMessage ? 'show' : ''}`}>
-                        <button className="close-btn" onClick={() => setResponseMessage(null)}>X</button>
+                    <div className="details-container show">
+                        <button className="close-btn" onClick={() => setResponseMessage(null)}>×</button>
                         <h3>Invoice Created Successfully</h3>
+
                         <div className="details">
-                            <h4>Invoice ID: {responseMessage.invoice._id}</h4>
-                            <p><strong>Customer Name:</strong> {responseMessage.invoice.customer.name}</p>
-                            <p><strong>Date:</strong> {new Date(responseMessage.invoice.date).toLocaleString()}</p>
-                            <p><strong>Status:</strong> {responseMessage.invoice.status}</p>
+                            <h4>Invoice ID:</h4>
+                            <p>{responseMessage.invoice._id}</p>
+                        </div>
+
+                        <div className="details">
+                            <h4>Customer Name:</h4>
+                            <p>{responseMessage.invoice.customer?.name || 'No Name Provided'}</p>
+                        </div>
+
+                        <div className="details">
+                            <h4>Date:</h4>
+                            <p>{new Date(responseMessage.invoice.date).toLocaleString()}</p>
+                        </div>
+
+                        <div className="details">
+                            <h4>Status:</h4>
+                            <p>{responseMessage.invoice.status || 'Unknown'}</p>
                         </div>
 
                         <div className="items-list">
-                            <h5>Items:</h5>
-                            <ul>
-                                {responseMessage.invoice.items.map((item) => (
-                                    <li key={item._id}>
-                                        {item.product} - Quantity: {item.quantity} - Price: ${item.price.toFixed(2)}
-                                    </li>
-                                ))}
-                            </ul>
+                            <h4>Items:</h4>
+                            {responseMessage.invoice.items && responseMessage.invoice.items.length > 0 ? (
+                                <ul>
+                                    {responseMessage.invoice.items.map((item, index) => (
+                                        <li key={index} className="item-details">
+                                            <p><strong>Product:</strong> {item.product || 'No Product Name'}</p>
+                                            <p><strong>Quantity:</strong> {item.quantity}</p>
+                                            <p><strong>Price:</strong> ${item.price?.toFixed(2) || '0.00'}</p>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p>No items available</p>
+                            )}
                         </div>
 
                         <div className="total-amount">
-                            <p><strong>Total Amount:</strong> ${responseMessage.invoice.total.toFixed(2)}</p>
-                            <p><strong>Discount Applied:</strong> ${responseMessage.invoice.discount.toFixed(2)}</p>
-                            <p><strong>Amount Paid:</strong> ${responseMessage.invoice.paid.toFixed(2)}</p>
-                            <p><strong>Remaining:</strong> ${responseMessage.invoice.remaining.toFixed(2)}</p>
+                            <h4>Invoice Summary:</h4>
+                            <p><strong>Total Amount:</strong> ${responseMessage.invoice.total?.toFixed(2) || '0.00'}</p>
+                            <p><strong>Discount Applied:</strong> ${responseMessage.invoice.discount?.toFixed(2) || '0.00'}</p>
+                            <p><strong>Amount Paid:</strong> ${responseMessage.invoice.paid?.toFixed(2) || '0.00'}</p>
+                            <p><strong>Remaining:</strong> ${responseMessage.invoice.remaining?.toFixed(2) || '0.00'}</p>
+                            <p><strong>Refunds:</strong> ${responseMessage.invoice.refunds?.toFixed(2) || '0.00'}</p>
                         </div>
                     </div>
                 )}
@@ -190,4 +221,3 @@ const InvoiceForm = () => {
 };
 
 export default InvoiceForm;
-
