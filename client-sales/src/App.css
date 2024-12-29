@@ -76,8 +76,31 @@ body {
   flex-grow: 1;
 }
 
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background-color: #f4f4f4;
+  z-index: 100000000;
+}
+
+.logo {
+  width: 120px;
+  height: 120px;
+  left: 60px;
+  position: absolute;
+}
+
 .title {
-  background-color: var(--color-light-grey);
+  color: var(--color-primary);
+  padding-bottom: 30px;
+  z-index: 10;
+  text-align: center;
+}
+
+.title-with-logo {
+  background-color: var(--color-white);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -93,35 +116,40 @@ body {
 }
 
 .grid-container {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  align-content: center;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 20px;
-  padding: 100px 20px 120px;
-  height: auto;
-  justify-content: center;
+  padding: 50px 20px;
   width: 100%;
-  overflow: auto;
-  flex-grow: 1;
 }
 
 /* Grid Items */
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  padding: 200px 20px 120px;
+  width: 100%;
+  height: 100%;
+}
+
 .grid-item {
   background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
   color: var(--color-white);
-  padding: 40px;
+  padding: 60px;
   text-align: center;
   border-radius: 15px;
   font-size: var(--font-size-medium);
   font-weight: var(--font-weight-bold);
-  max-width: 300px;
-  width: 100%;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
   transition: transform var(--transition-duration), box-shadow var(--transition-duration);
   cursor: pointer;
   text-decoration: none;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 .grid-item:hover {
@@ -141,7 +169,6 @@ body {
   font-size: var(--font-size-small);
   font-weight: var(--font-weight-regular);
   margin-top: auto;
-  /* يتأكد من أن الفوتر في الأسفل دائمًا */
 }
 
 .footer p {
@@ -151,17 +178,14 @@ body {
 /* Responsive Styles */
 @media (max-width: 768px) {
   .grid-container {
-    padding: 80px 10px 10px;
-    /* تحسين المسافة لتناسب الشاشات الصغيرة */
+    padding: 20px;
   }
 
   .grid-item {
-    max-width: 90%;
-    padding: 30px;
+    padding: 15px;
   }
 
   .title {
     font-size: var(--font-size-medium);
-    /* تقليل الحجم في الشاشات الصغيرة */
   }
 }

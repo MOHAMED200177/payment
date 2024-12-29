@@ -40,7 +40,7 @@ exports.getCustomerStatement = async (req, res) => {
                 amount: transaction.amount,
                 details: transaction.details,
                 status: transaction.status,
-                date: transaction.createdAt,
+                date: transaction.date,
             };
         });
 

@@ -73,10 +73,10 @@ const InvoiceForm = () => {
 
     return (
         <>
-            <div className="title">
-                <h1>Invoice</h1>
-            </div>
             <div className="form-container">
+                <div className="title">
+                    <h1>Invoice</h1>
+                </div>
                 <form onSubmit={handleSubmit} className="form">
                     <div>
                         <label htmlFor="name">Name</label>

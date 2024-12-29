@@ -10,10 +10,10 @@ const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
 
 
-// exports.allInvoives = Crud.getAll(Invoice);
-// exports.updateInvoice = Crud.updateOne(Invoice);
-// exports.oneInvoice = Crud.getOne(Invoice);
-// exports.deleteInvoice = Crud.deleteOne(Invoice);
+exports.allInvoives = Crud.getAll(Invoice);
+exports.updateInvoice = Crud.updateOne(Invoice);
+exports.oneInvoice = Crud.getOne(Invoice, { path: 'customer', select: 'name' });
+exports.deleteInvoice = Crud.deleteOne(Invoice);
 
 
 // Create new invoice
@@ -70,7 +70,7 @@ exports.createInvoice = catchAsync(async (req, res, next) => {
         if (amount > totalAfterDiscount) {
             throw new AppError(`Payment amount (${amount}) exceeds total invoice amount (${totalAfterDiscount})`, 400);
         }
-        
+
         const remaining = totalAfterDiscount - amount;
 
 

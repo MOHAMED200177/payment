@@ -1,0 +1,71 @@
+/* تصميم اللودر */
+.loader {
+    margin-top: 20px;
+    text-align: center;
+    font-size: 18px;
+    color: #555;
+    font-weight: bold;
+}
+
+/* تصميم الجدول */
+.transactions-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    background-color: #fff;
+}
+
+.transactions-table th,
+.transactions-table td {
+    border: 1px solid #ddd;
+    padding: 10px;
+    text-align: left;
+    font-size: 14px;
+}
+
+.transactions-table th {
+    background-color: #f4f4f4;
+    color: #333;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.transactions-table tfoot td {
+    background-color: #f9f9f9;
+    font-weight: bold;
+}
+
+.transactions-table tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+.transactions-table tr:hover {
+    background-color: #f1f1f1;
+}
+
+.transactions-table td {
+    color: #555;
+}
+
+/* تنسيق قسم التقرير */
+.statement-container {
+    margin-top: 20px;
+    padding: 20px;
+    border: 1px solid #ddd;
+    background-color: #f9f9f9;
+    border-radius: 5px;
+    font-family: Arial, sans-serif;
+}
+
+.statement-container h3 {
+    margin-bottom: 10px;
+    color: #333;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.statement-container p {
+    margin: 5px 0;
+    font-size: 14px;
+    color: #555;
+}

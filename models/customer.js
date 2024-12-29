@@ -13,6 +13,7 @@ const customerSchema = new mongoose.Schema({
     returns: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Return' }],
     payment: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Payment' }],
     transactions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Transaction' }],
+    date: { type: Date, default: Date.now },
 });
 
 module.exports = mongoose.model('Customer', customerSchema);

@@ -28,10 +28,10 @@ const ReturnForm = ({ onReturnAdded }) => {
 
     return (
         <>
-            <div className="title">
-                <h2>Create Return</h2>
-            </div>
             <div className="form-container">
+                <div className="title">
+                    <h2>Create Return</h2>
+                </div>
                 <form className="form" onSubmit={(e) => e.preventDefault()}>
                     <label htmlFor="invoiceId">Invoice ID</label>
                     <input

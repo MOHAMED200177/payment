@@ -6,7 +6,7 @@ const returnSchema = new mongoose.Schema({
     product: { type: mongoose.Schema.Types.ObjectId, ref: 'Stock', required: true },
     quantity: { type: Number, required: true, min: 1 },
     reason: { type: String },
-    createdAt: { type: Date, default: Date.now },
+    date: { type: Date, default: Date.now },
 });
 
 module.exports = mongoose.model('Return', returnSchema);

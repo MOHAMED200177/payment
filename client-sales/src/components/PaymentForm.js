@@ -20,10 +20,10 @@ const PaymentForm = ({ onPaymentAdded }) => {
 
     return (
         <>
-            <div className="title">
-                <h2>Add Payment</h2>
-            </div>
             <div className="form-container">
+                <div className="title">
+                    <h2>Add Payment</h2>
+                </div>
                 <form className="form" onSubmit={(e) => e.preventDefault()}>
                     <label htmlFor="name">Customer name</label>
                     <input

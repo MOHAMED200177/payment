@@ -42,10 +42,10 @@ const StockForm = ({ onStockCreated }) => {
 
     return (
         <div className="form-wrapper">
-            <div className="title">
-                <h1>Create Stock</h1>
-            </div>
             <div className="form-container">
+                <div className="title">
+                    <h1>Create Stock</h1>
+                </div>
                 <form className="form" onSubmit={createStock}>
                     <label htmlFor="product">Product</label>
                     <input
