@@ -176,6 +176,10 @@ const InvoiceForm = () => {
                         <div className="details">
                             <h4>Customer Name:</h4>
                             <p>{responseMessage.invoice.customer?.name || 'No Name Provided'}</p>
+                            <h4>Customer phone:</h4>
+                            <p>{responseMessage.invoice.customer?.phone || 'No phone Provided'}</p>
+                            <h4>Customer email:</h4>
+                            <p>{responseMessage.invoice.customer?.email || 'No email Provided'}</p>
                         </div>
 
                         <div className="details">

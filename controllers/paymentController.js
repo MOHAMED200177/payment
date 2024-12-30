@@ -1,79 +1,84 @@
+const mongoose = require('mongoose');
 const Payment = require('../models/payment');
 const Invoice = require('../models/invoice');
 const Customer = require('../models/customer');
-const Crud = require('./crudFactory');
 const Transaction = require('../models/transactions');
-
+const Crud = require('./crudFactory');
 
 exports.allPayment = Crud.getAll(Payment);
 exports.updatePayment = Crud.updateOne(Payment);
 exports.onePayment = Crud.getOne(Payment);
 exports.deletePayment = Crud.deleteOne(Payment);
 
-
 exports.addPayment = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
     try {
         const { name, amount, invoiceId } = req.body;
 
-        const customer = await Customer.findOne({ name });
+        // Find customer by name
+        const customer = await Customer.findOne({ name }).session(session);
         if (!customer) {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(404).json({ message: 'Customer not found' });
         }
 
-
-        // Fetch invoice
-        const invoice = await Invoice.findById(invoiceId);
+        // Find invoice by ID
+        const invoice = await Invoice.findById(invoiceId).session(session);
         if (!invoice) {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(404).json({ message: 'Invoice not found' });
         }
 
-        // Check if payment exceeds the remaining invoice amount
         const remaining = invoice.total - (invoice.paid || 0);
         if (amount > remaining) {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(400).json({ message: `Payment exceeds remaining invoice amount. Remaining: ${remaining}` });
         }
 
-        // Add payment
-        const payment = new Payment({ customer: customer.id, customerName: name, amount, invoice: invoiceId });
-        await payment.save();
+        // Create payment
+        const payment = new Payment({
+            customer: customer.id,
+            customerName: name,
+            amount,
+            invoice: invoiceId,
+        });
+        await payment.save({ session });
 
-        const transaction = await Transaction.create({
+        // Create transaction
+        const transaction = await Transaction.create([{
             type: 'payment',
             referenceId: invoice._id,
             amount,
             details: `Payment of ${amount} for invoice ${invoice._id}`,
             status: 'credit',
-        });
+        }], { session });
 
-        customer.transactions.push(transaction._id)
+        // Update customer
+        customer.transactions.push(transaction[0]._id);
         customer.payment.push(payment._id);
         customer.balance -= amount;
-        await customer.save();
+        await customer.save({ session });
 
-        // Update invoice's paid amount
+        // Update invoice
         invoice.paid = (invoice.paid || 0) + amount;
-        invoice.remaining -= amount
-        await invoice.save();
+        invoice.remaining -= amount;
+        await invoice.save({ session });
+
+        // Commit transaction
+        await session.commitTransaction();
+        session.endSession();
 
         res.status(201).json({
             message: 'Payment added successfully',
-            payment: {
-                payment,
-                customer: {
-                    name: customer.name,
-                    email: customer.email,
-                    phone: customer.phone,
-                },
-                invoice: {
-                    items: invoice.items,
-                    total: invoice.total,
-
-                    paid: invoice.paid,
-                    status: invoice.status,
-                },
-            },
         });
     } catch (error) {
+        // Rollback transaction
+        await session.abortTransaction();
+        session.endSession();
         res.status(500).json({ message: error.message });
     }
 };

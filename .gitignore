@@ -1,2 +1,26 @@
 node_modules
 .env
+
+
+
+const CustomerPage = () => {
+  const location = useLocation();
+
+  return (
+    <div>
+      <PageHeader title="Customers" />
+      {location.pathname === '/customers' && (
+        <div className="grid-container">
+          <Link to="create" className="grid-item" target="_blank" rel="noopener noreferrer">Create customers</Link>
+          <Link to="statement" className="grid-item" target="_blank" rel="noopener noreferrer">Customer Statement</Link>
+          <Link to="edit" className="grid-item" target="_blank" rel="noopener noreferrer">Edit customers</Link>
+          <Link to="delete" className="grid-item" target="_blank" rel="noopener noreferrer">Delete customers</Link>
+        </div>
+      )}
+      <Routes>
+        <Route path="create" element={<Customer />} />
+        <Route path="statement" element={<CustomerStatement />} />
+      </Routes>
+    </div>
+  );
+};

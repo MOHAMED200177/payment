@@ -1,13 +1,14 @@
 import React from 'react';
 import './App.css';
-import logo from './img/logo.jpg'; // استدعاء الصورة
+import logo from './img/logo.jpg';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import InvoiceForm from './components/InvoiceForm';
 import InvoiceList from './components/InvoiceList';
 import StockForm from './components/StockForm';
 import PaymentForm from './components/PaymentForm';
 import ReturnForm from './components/ReturnForm';
-import CustomerStatement from './components/CustomerStatement';
+import CustomerStatement from './components/Customers/CustomerStatement';
+import Customer from './components/Customers/creatCustomer';
 
 const App = () => {
   return (
@@ -19,7 +20,7 @@ const App = () => {
           <Route path="/stock/*" element={<StockPage />} />
           <Route path="/payments/*" element={<PaymentPage />} />
           <Route path="/returns/*" element={<ReturnPage />} />
-          <Route path="/customer-statement" element={<CustomerStatement />} />
+          <Route path="/customers/*" element={<CustomerPage />} />
         </Routes>
         <Footer />
       </div>
@@ -38,7 +39,7 @@ const HomePage = () => (
       <Link to="/stock" className="grid-item">Stock</Link>
       <Link to="/payments" className="grid-item">Payments</Link>
       <Link to="/returns" className="grid-item">Returns</Link>
-      <Link to="/customer-statement" className="grid-item">Customers</Link>
+      <Link to="/customers" className="grid-item">Customers</Link>
     </div>
   </div>
 );
@@ -139,6 +140,30 @@ const ReturnPage = () => {
   );
 };
 
+const CustomerPage = () => {
+  const location = useLocation();
+
+  return (
+    <div>
+      <PageHeader title="Customers" />
+      {location.pathname === '/customers' && (
+        <div className="grid-container">
+          <Link to="create" className="grid-item">Add Customer</Link>
+          <Link to="statement" className="grid-item">statement Customers</Link>
+          <Link to="veiw" className="grid-item">veiw Customer</Link>
+          <Link to="delete" className="grid-item">Delete Customer</Link>
+        </div>
+      )}
+      <Routes>
+        <Route path="create" element={<Customer />} />
+        <Route path="statement" element={<div>{<CustomerStatement />}</div>} />
+        <Route path="veiw" element={<div>veiw Customer</div>} />
+        <Route path="delete" element={<div>Delete Customer</div>} />
+      </Routes>
+    </div>
+  );
+};
+
 const PageHeader = ({ title }) => (
   <div className="title-with-logo">
     <img src={logo} alt="Logo" className="logo" />
@@ -153,4 +178,3 @@ const Footer = () => (
 );
 
 export default App;
-

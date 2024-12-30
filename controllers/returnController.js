@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Return = require('../models/return');
 const Customer = require('../models/customer');
 const Stock = require('../models/stock');
@@ -11,77 +12,94 @@ exports.oneReturn = Crud.getOne(Return);
 exports.deleteReturn = Crud.deleteOne(Return);
 
 exports.addReturn = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
     try {
         const { invoiceId, productName, name, quantity, reason } = req.body;
 
-        const customer = await Customer.findOne({ name })
+        // Find the customer
+        const customer = await Customer.findOne({ name }).session(session);
         if (!customer) {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(404).json({ message: 'Customer not found' });
         }
 
-        const invoice = await Invoice.findById(invoiceId);
+        // Find the invoice
+        const invoice = await Invoice.findById(invoiceId).session(session);
         if (!invoice) {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(404).json({ message: 'Invoice not found' });
         }
 
-        const product = await Stock.findOne({ product: productName });
+        // Find the product in stock
+        const product = await Stock.findOne({ product: productName }).session(session);
         if (!product) {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(404).json({ message: 'Product not found in stock' });
         }
 
+        // Check invoice item and return quantity
         const invoiceItem = invoice.items.find(item => item.product_id.toString() === product._id.toString());
         if (!invoiceItem || quantity > invoiceItem.quantity) {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(400).json({ message: 'Invalid return quantity' });
         }
 
+        // Calculate refund amount
         const refundAmount = product.price * quantity;
 
-        customer.balance -= refundAmount;
-
-
+        // Update product stock
         product.quantity += quantity;
-        await product.save();
+        await product.save({ session });
 
-
-        const newReturn = await Return.create({
+        // Create return record
+        const newReturn = new Return({
             invoice: invoice._id,
             customer: customer._id,
             product: product._id,
             quantity,
             reason,
         });
+        await newReturn.save({ session });
 
-
+        // Update invoice
         invoice.returns.push(newReturn._id);
         invoice.refunds = (invoice.refunds || 0) + refundAmount;
         invoice.total -= refundAmount;
         invoice.remaining -= refundAmount;
-        await invoice.save();
+        await invoice.save({ session });
 
-        const refundTransaction = await Transaction.create({
+        // Create refund transaction
+        const refundTransaction = new Transaction({
             type: 'return',
             referenceId: newReturn._id,
             amount: -refundAmount,
             details: `Refund of ${refundAmount} for returned quantity of ${quantity} from invoice ${invoice._id}`,
             status: 'debit',
         });
+        await refundTransaction.save({ session });
 
+        // Update customer
         customer.transactions.push(refundTransaction._id);
         customer.returns.push(newReturn._id);
-        customer.balance += -refundAmount;
-        await customer.save();
+        customer.balance -= refundAmount;
+        await customer.save({ session });
 
+        // Commit transaction
+        await session.commitTransaction();
+        session.endSession();
 
         res.status(201).json({
             message: 'Return added successfully',
-            invoice: invoice,
-            customer: customer,
-            product: product,
-            quantity,
-            reason,
         });
-
     } catch (error) {
+        // Rollback transaction on error
+        await session.abortTransaction();
+        session.endSession();
         res.status(500).json({ message: 'Error processing return', error });
     }
 };

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+
 const Crud = require('./crudFactory');
 const Payment = require('../models/payment');
 const Customer = require('../models/customer');
@@ -6,6 +7,7 @@ const Invoice = require('../models/invoice');
 const Stock = require('../models/stock');
 const Transaction = require('../models/transactions');
 const invoiceSchema = require('../schemas/invoice.schema');
+
 const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
 
@@ -22,20 +24,26 @@ exports.createInvoice = catchAsync(async (req, res, next) => {
     session.startTransaction();
 
     try {
-        // Validate input
-        const { error, value } = invoiceSchema.validate(req.body);
-        if (error) throw new AppError(error.details[0].message, 400);
+
+        const { error, value } = invoiceSchema.validate(req.body, { abortEarly: false });
+        if (error) {
+            const messages = error.details.map(detail => detail.message).join(', ');
+            throw new AppError(messages, 400);
+        }
 
         const { name, email, phone, items, amount, discount } = value;
 
-        // Find or create customer
         const customer = await Customer.findOneAndUpdate(
             { email },
             { name, email, phone },
             { upsert: true, new: true, session }
         );
 
-        // Update stock and calculate total
+
+        if (amount < 0) {
+            throw new AppError('Payment amount cannot be negative', 400);
+        }
+
         const updatedItems = [];
         let calculatedTotal = 0;
 
@@ -60,8 +68,7 @@ exports.createInvoice = catchAsync(async (req, res, next) => {
 
         if (discount) {
 
-            discountAmount = calculatedTotal * (discount / 100); // Calculate discount amount
-
+            discountAmount = calculatedTotal * (discount / 100);
         }
 
 
@@ -73,8 +80,6 @@ exports.createInvoice = catchAsync(async (req, res, next) => {
 
         const remaining = totalAfterDiscount - amount;
 
-
-        // Create and save invoice
 
         const invoice = new Invoice({
 
@@ -94,8 +99,6 @@ exports.createInvoice = catchAsync(async (req, res, next) => {
 
         await invoice.save({ session });
 
-
-        // Create and save payment
         const payment = new Payment({ customer: customer._id, customerName: name, amount, invoice: invoice._id });
         await payment.save({ session });
 
@@ -114,7 +117,9 @@ exports.createInvoice = catchAsync(async (req, res, next) => {
                 details: `Payment of ${amount} for invoice ${invoice._id}`,
                 status: 'credit',
             }
-        ]);
+        ],
+            { session }
+        );
 
         invoiceTransaction.forEach((transaction) => {
             customer.transactions.push(transaction._id);
@@ -128,15 +133,26 @@ exports.createInvoice = catchAsync(async (req, res, next) => {
         await customer.save({ session });
 
         await session.commitTransaction();
-        const populatedInvoice = await Invoice.findById(invoice.id).populate('customer', 'name');
+
 
         res.status(201).json({
             message: 'Invoice created successfully',
-            invoice: populatedInvoice,
+            invoice: {
+                ...invoice.toObject(),
+                customer: {
+                    name: customer.name,
+                    phone: customer.phone,
+                    email: customer.email
+                },
+            },
         });
     } catch (error) {
         await session.abortTransaction();
-        next(error);
+        if (error instanceof AppError) {
+            next(error);
+        } else {
+            next(new AppError('Something went wrong during invoice creation', 500));
+        }
     } finally {
         session.endSession();
     }

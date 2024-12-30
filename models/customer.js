@@ -2,10 +2,10 @@
 const mongoose = require('mongoose');
 
 const customerSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    email: { type: String, required: true },
+    name: { type: String, required: true, unique: true },
+    email: { type: String, required: true, unique: true },
     address: { type: String, required: false },
-    phone: { type: String, required: true },
+    phone: { type: String, required: true, unique: true },
     balance: { type: String, required: true, default: 0 },
     outstandingBalance: { type: Number, default: 0 },
     cash: { type: Number, default: 0 },
@@ -15,5 +15,7 @@ const customerSchema = new mongoose.Schema({
     transactions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Transaction' }],
     date: { type: Date, default: Date.now },
 });
+
+customerSchema.index({ name: 1 }, { unique: true });
 
 module.exports = mongoose.model('Customer', customerSchema);
