@@ -14,7 +14,7 @@ const catchAsync = require('../utils/catchAsync');
 
 exports.allInvoives = Crud.getAll(Invoice);
 exports.updateInvoice = Crud.updateOne(Invoice);
-exports.oneInvoice = Crud.getOne(Invoice, { path: 'customer', select: 'name' });
+exports.oneInvoice = Crud.getOneById(Invoice, { path: 'customer', select: 'name' });
 exports.deleteInvoice = Crud.deleteOne(Invoice);
 
 
@@ -24,20 +24,26 @@ exports.createInvoice = catchAsync(async (req, res, next) => {
     session.startTransaction();
 
     try {
+        const { name, email, phone, items, amount, discount } = req.body;
+
+        let customer = await Customer.findOne({ name });
+
+        if (!customer) {
+            if (!email || !phone) {
+                throw new AppError('Email and phone are required for new customers.', 400);
+            }
+            customer = new Customer({ name, email, phone });
+            await customer.save({ session });
+        } else {
+            req.body.email = req.body.email || customer.email;
+            req.body.phone = req.body.phone || customer.phone;
+        }
 
         const { error, value } = invoiceSchema.validate(req.body, { abortEarly: false });
         if (error) {
             const messages = error.details.map(detail => detail.message).join(', ');
             throw new AppError(messages, 400);
         }
-
-        const { name, email, phone, items, amount, discount } = value;
-
-        const customer = await Customer.findOneAndUpdate(
-            { email },
-            { name, email, phone },
-            { upsert: true, new: true, session }
-        );
 
 
         if (amount < 0) {
@@ -152,6 +158,7 @@ exports.createInvoice = catchAsync(async (req, res, next) => {
             next(error);
         } else {
             next(new AppError('Something went wrong during invoice creation', 500));
+            console.log(error);
         }
     } finally {
         session.endSession();

@@ -10,10 +10,12 @@ router.
     route('/')
     .get(customerController.allCustomer)
     .post(customerController.createCustomer);
+router.
+    route('/profile')
+    .post(customerController.oneCustomer)
 
 router.
     route('/:id')
-    .get(customerController.oneCustomer)
     .patch(customerController.updateCustomer)
     .delete(customerController.deleteCustomer);
 

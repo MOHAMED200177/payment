@@ -2,13 +2,16 @@ import React from 'react';
 import './App.css';
 import logo from './img/logo.jpg';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import InvoiceForm from './components/InvoiceForm';
-import InvoiceList from './components/InvoiceList';
+import InvoiceForm from './components/Invoice/InvoiceForm';
+import InvoiceList from './components/Invoice/InvoiceList';
 import StockForm from './components/StockForm';
+import StockList from './components/StockList';
 import PaymentForm from './components/PaymentForm';
 import ReturnForm from './components/ReturnForm';
 import CustomerStatement from './components/Customers/CustomerStatement';
 import Customer from './components/Customers/creatCustomer';
+import Profile from './components/Customers/Customer';
+import CustomerList from './components/Customers/CustomerList';
 
 const App = () => {
   return (
@@ -84,7 +87,7 @@ const StockPage = () => {
       )}
       <Routes>
         <Route path="create" element={<StockForm />} />
-        <Route path="view" element={<div>View Stock</div>} />
+        <Route path="view" element={<StockList />} />
         <Route path="edit" element={<div>Edit Stock</div>} />
         <Route path="delete" element={<div>Delete Stock</div>} />
       </Routes>
@@ -150,15 +153,15 @@ const CustomerPage = () => {
         <div className="grid-container">
           <Link to="create" className="grid-item">Add Customer</Link>
           <Link to="statement" className="grid-item">statement Customers</Link>
-          <Link to="veiw" className="grid-item">veiw Customer</Link>
-          <Link to="delete" className="grid-item">Delete Customer</Link>
+          <Link to="veiw" className="grid-item">veiw Customers</Link>
+          <Link to="Customer" className="grid-item">Customer</Link>
         </div>
       )}
       <Routes>
         <Route path="create" element={<Customer />} />
         <Route path="statement" element={<div>{<CustomerStatement />}</div>} />
-        <Route path="veiw" element={<div>veiw Customer</div>} />
-        <Route path="delete" element={<div>Delete Customer</div>} />
+        <Route path="veiw" element={<div>{<CustomerList />}</div>} />
+        <Route path="Customer" element={<div>{<Profile />}</div>} />
       </Routes>
     </div>
   );

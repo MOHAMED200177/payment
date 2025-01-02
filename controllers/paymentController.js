@@ -7,7 +7,7 @@ const Crud = require('./crudFactory');
 
 exports.allPayment = Crud.getAll(Payment);
 exports.updatePayment = Crud.updateOne(Payment);
-exports.onePayment = Crud.getOne(Payment);
+exports.onePayment = Crud.getOneById(Payment);
 exports.deletePayment = Crud.deleteOne(Payment);
 
 exports.addPayment = async (req, res) => {

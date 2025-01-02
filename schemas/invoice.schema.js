@@ -2,8 +2,8 @@ const Joi = require('joi');
 
 const invoiceSchema = Joi.object({
     name: Joi.string().required(),
-    email: Joi.string().email().required(),
-    phone: Joi.string().required(),
+    email: Joi.string().email(),
+    phone: Joi.string(),
     items: Joi.array().items(
         Joi.object({
             product: Joi.string().required(),

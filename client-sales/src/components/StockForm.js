@@ -33,10 +33,9 @@ const StockForm = ({ onStockCreated }) => {
             setPrice('');
         } catch (error) {
             const errorMessage = error.response?.data?.message || error.message;
-            // Error message with the issue details
             alert(`An error occurred while creating the stock item:\n${errorMessage}`);
         } finally {
-            setLoading(false); // Hide loading state
+            setLoading(false);
         }
     };
 

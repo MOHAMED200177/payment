@@ -8,7 +8,7 @@ const Crud = require('./crudFactory');
 
 exports.allReturn = Crud.getAll(Return);
 exports.updateReturn = Crud.updateOne(Return);
-exports.oneReturn = Crud.getOne(Return);
+exports.oneReturn = Crud.getOneById(Return);
 exports.deleteReturn = Crud.deleteOne(Return);
 
 exports.addReturn = async (req, res) => {

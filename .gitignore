@@ -24,3 +24,4 @@ const CustomerPage = () => {
     </div>
   );
 };
+.codegpt

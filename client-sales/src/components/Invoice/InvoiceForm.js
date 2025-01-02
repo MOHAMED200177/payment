@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import './css/Form.css';
-import './css/invoiceRes.css';
+import '../css/Form.css';
+import './invoiceRes.css';
 
 const InvoiceForm = () => {
     const [name, setName] = useState('');
@@ -38,7 +38,7 @@ const InvoiceForm = () => {
         setError(null);
         setResponseMessage(null);
 
-        if (!name || !email || !phone || amount <= 0 || items.length === 0 || items.some(item => !item.product || item.quantity <= 0)) {
+        if (!name || amount <= 0 || items.length === 0 || items.some(item => !item.product || item.quantity <= 0)) {
             setError('Please fill all fields correctly');
             return;
         }
@@ -95,7 +95,6 @@ const InvoiceForm = () => {
                             id="email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            required
                         />
                     </div>
                     <div>
@@ -105,7 +104,6 @@ const InvoiceForm = () => {
                             id="phone"
                             value={phone}
                             onChange={(e) => setPhone(e.target.value)}
-                            required
                         />
                     </div>
                     {items.map((item, index) => (
@@ -122,7 +120,6 @@ const InvoiceForm = () => {
                                 type="number"
                                 value={item.quantity}
                                 onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value))}
-                                required
                             />
                         </div>
                     ))}
@@ -176,9 +173,9 @@ const InvoiceForm = () => {
                         <div className="details">
                             <h4>Customer Name:</h4>
                             <p>{responseMessage.invoice.customer?.name || 'No Name Provided'}</p>
-                            <h4>Customer phone:</h4>
+                            <h4>Customer Phone:</h4>
                             <p>{responseMessage.invoice.customer?.phone || 'No phone Provided'}</p>
-                            <h4>Customer email:</h4>
+                            <h4>Customer Email:</h4>
                             <p>{responseMessage.invoice.customer?.email || 'No email Provided'}</p>
                         </div>
 
@@ -200,7 +197,7 @@ const InvoiceForm = () => {
                                         <li key={index} className="item-details">
                                             <p><strong>Product:</strong> {item.product || 'No Product Name'}</p>
                                             <p><strong>Quantity:</strong> {item.quantity}</p>
-                                            <p><strong>Price:</strong> ${item.price?.toFixed(2) || '0.00'}</p>
+                                            <p><strong>Price:</strong> ${item.price}</p>
                                         </li>
                                     ))}
                                 </ul>
@@ -211,14 +208,16 @@ const InvoiceForm = () => {
 
                         <div className="total-amount">
                             <h4>Invoice Summary:</h4>
-                            <p><strong>Total Amount:</strong> ${responseMessage.invoice.total?.toFixed(2) || '0.00'}</p>
-                            <p><strong>Discount Applied:</strong> ${responseMessage.invoice.discount?.toFixed(2) || '0.00'}</p>
-                            <p><strong>Amount Paid:</strong> ${responseMessage.invoice.paid?.toFixed(2) || '0.00'}</p>
-                            <p><strong>Remaining:</strong> ${responseMessage.invoice.remaining?.toFixed(2) || '0.00'}</p>
-                            <p><strong>Refunds:</strong> ${responseMessage.invoice.refunds?.toFixed(2) || '0.00'}</p>
+                            <p><strong>Total Amount:</strong> ${responseMessage.invoice.total
+                            }</p>
+                            <p><strong>Discount Applied:</strong> ${responseMessage.invoice.discount}</p>
+                            <p><strong>Amount Paid:</strong> ${responseMessage.invoice.paid}</p>
+                            <p><strong>Remaining:</strong> ${responseMessage.invoice.remaining}</p>
+                            <p><strong>Refunds:</strong> ${responseMessage.invoice.refunds}</p>
                         </div>
                     </div>
                 )}
+
             </div>
         </>
     );

@@ -1,0 +1,44 @@
+.customer-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #f9f9f9;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+
+.customer-card,
+.item-card {
+    background: #ffffff;
+    margin-bottom: 15px;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.section {
+    margin-top: 30px;
+}
+
+.section h2 {
+    color: #333;
+    margin-bottom: 10px;
+}
+
+.loading {
+    text-align: center;
+    font-size: 1.5em;
+    color: #000000;
+}
+
+.error {
+    text-align: center;
+    font-size: 1.2em;
+    color: red;
+}
+
+.item-card p {
+    margin: 5px 0;
+}
