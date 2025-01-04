@@ -83,7 +83,7 @@ exports.exportInvoicesToExcel = async (req, res) => {
 
 exports.fileCustomerStatement = async (req, res) => {
     try {
-        const { name, format } = req.body;
+        const { name } = req.body;
 
         if (!name) {
             return res.status(400).json({ message: 'name is required' });
@@ -96,7 +96,6 @@ exports.fileCustomerStatement = async (req, res) => {
         }
 
         const transactions = customer.transactions || [];
-
         let totalDebit = 0;
         let totalCredit = 0;
 
@@ -120,75 +119,39 @@ exports.fileCustomerStatement = async (req, res) => {
 
         const balance = totalCredit - totalDebit;
 
-        // Return as PDF or Excel based on the format parameter
-        if (format === 'pdf') {
-            const doc = new PDFDocument();
-            const filePath = path.join(__dirname, '..', 'exports', 'Customer.pdf');
-            const writeStream = fs.createWriteStream(filePath);
-            doc.pipe(writeStream);
+        // Create workbook and worksheet
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Customer Statement');
 
-            doc.fontSize(18).text(`Customer Statement for ${customer.name}`, { align: 'center' });
-            doc.fontSize(14).text(`Email: ${customer.email}`);
-            doc.text(`Phone: ${customer.phone}`);
-            doc.text(`Address: ${customer.address || 'N/A'}`);
-            doc.text('');
-            doc.text(`Total Debit: ${totalDebit}`);
-            doc.text(`Total Credit: ${totalCredit}`);
-            doc.text(`Balance: ${balance}`);
-            doc.text('');
+        worksheet.columns = [
+            { header: 'ID', key: 'id' },
+            { header: 'Type', key: 'type' },
+            { header: 'Reference ID', key: 'referenceId' },
+            { header: 'Amount', key: 'amount' },
+            { header: 'Details', key: 'details' },
+            { header: 'Status', key: 'status' },
+            { header: 'Date', key: 'date' },
+        ];
 
-            doc.text('Transactions:');
-            transactionDetails.forEach(transaction => {
-                doc.text(`ID: ${transaction.id} | Type: ${transaction.type} | Amount: ${transaction.amount} | Status: ${transaction.status}`);
-            });
+        transactionDetails.forEach(transaction => {
+            worksheet.addRow(transaction);
+        });
 
-            doc.end();
+        worksheet.addRow({});
+        worksheet.addRow({ id: 'Total Debit', amount: totalDebit });
+        worksheet.addRow({ id: 'Total Credit', amount: totalCredit });
+        worksheet.addRow({ id: 'Balance', amount: balance });
 
-            writeStream.on('finish', () => {
-                res.download(filePath, 'Customer.pdf');
-            });
-
-        } else if (format === 'excel') {
-            const workbook = new ExcelJS.Workbook();
-            const worksheet = workbook.addWorksheet('Customer Statement');
-
-            worksheet.columns = [
-                { header: 'ID', key: 'id' },
-                { header: 'Type', key: 'type' },
-                { header: 'Reference ID', key: 'referenceId' },
-                { header: 'Amount', key: 'amount' },
-                { header: 'Details', key: 'details' },
-                { header: 'Status', key: 'status' },
-                { header: 'Date', key: 'date' },
-            ];
-
-            transactionDetails.forEach(transaction => {
-                worksheet.addRow(transaction);
-            });
-
-            worksheet.addRow({});
-            worksheet.addRow({
-                id: 'Total Debit',
-                amount: totalDebit,
-            });
-            worksheet.addRow({
-                id: 'Total Credit',
-                amount: totalCredit,
-            });
-            worksheet.addRow({
-                id: 'Balance',
-                amount: balance,
-            });
-
-            const filePath = path.join(__dirname, '..', 'exports', 'Customer.xlsx');
-            await workbook.xlsx.writeFile(filePath);
-
-            res.download(filePath, 'Customer.xlsx');
-        } else {
-            res.status(400).json({
-                message: 'Invalid format. Please specify either "pdf" or "excel".',
-            });
+        // Ensure exports directory exists
+        const exportsDir = path.join(__dirname, '..', 'exports');
+        if (!fs.existsSync(exportsDir)) {
+            fs.mkdirSync(exportsDir);
         }
+
+        const filePath = path.join(exportsDir, 'Customer.xlsx');
+        await workbook.xlsx.writeFile(filePath);
+
+        res.download(filePath, 'Customer.xlsx');
     } catch (error) {
         console.error('Error fetching customer statement:', error);
         res.status(500).json({ message: error.message });
