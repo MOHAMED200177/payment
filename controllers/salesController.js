@@ -1,17 +1,26 @@
 const Invoice = require('../models/invoice');
 
-exports.getSalesReport = async (req, res) => {
-    try {
-        const { startDate, endDate } = req.query;
+exports.financialReport = catchAsync(async (req, res, next) => {
+    const { year } = req.query;
 
-        const invoices = await Invoice.find({
-            createdAt: { $gte: new Date(startDate), $lte: new Date(endDate) },
-        });
+    const report = await Invoice.aggregate([
+        {
+            $match: {
+                createdAt: {
+                    $gte: new Date(`${year}-01-01`),
+                    $lte: new Date(`${year}-12-31`),
+                },
+            },
+        },
+        {
+            $group: {
+                _id: { $month: '$createdAt' },
+                totalRevenue: { $sum: '$total' },
+                totalPayments: { $sum: '$paid' },
+                totalDiscounts: { $sum: '$discount' },
+            },
+        },
+    ]);
 
-        const totalSales = invoices.reduce((sum, invoice) => sum + invoice.total, 0);
-
-        res.status(200).json({ totalSales, invoices });
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-};
+    res.status(200).json({ message: `Financial report for ${year}`, report });
+});

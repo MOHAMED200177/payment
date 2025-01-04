@@ -18,11 +18,21 @@ const invoiceSchema = new mongoose.Schema({
     status: { type: String, enum: ['Paid', 'Unpaid'] },
     refunds: { type: Number, default: 0 },
     discount: { type: Number, default: 0 },
+    invoiceNumber: { type: String, unique: true, required: true },
     date: { type: Date, default: Date.now },
 });
 
 invoiceSchema.pre('save', function (next) {
     this.status = this.total <= this.paid ? 'Paid' : 'Unpaid';
+    next();
+});
+
+invoiceSchema.pre('save', async function (next) {
+    if (!this.isNew) return next(); // إذا كانت الفاتورة ليست جديدة، لا يتم التغيير
+
+    const count = await mongoose.model('Invoice').countDocuments();
+    const year = new Date().getFullYear();
+    this.invoiceNumber = `INV-${year}-${String(count + 1).padStart(4, '0')}`; // تنسيق الرقم
     next();
 });
 

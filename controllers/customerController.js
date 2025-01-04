@@ -9,14 +9,14 @@ exports.deleteCustomer = Crud.deleteOne(Customer);
 
 exports.getCustomerStatement = async (req, res) => {
     try {
-        const { email } = req.body;
+        const { name } = req.body;
 
-        if (!email) {
-            return res.status(400).json({ message: 'Email is required' });
+        if (!name) {
+            return res.status(400).json({ message: 'name is required' });
         }
 
         // Fetch customer details
-        const customer = await Customer.findOne({ email }).populate('transactions').lean();
+        const customer = await Customer.findOne({ name }).populate('transactions').lean();
         if (!customer) {
             return res.status(404).json({ message: 'Customer not found' });
         }
@@ -51,6 +51,7 @@ exports.getCustomerStatement = async (req, res) => {
                 name: customer.name,
                 email: customer.email,
                 phone: customer.phone,
+                address: customer.address || "N/A"
             },
             totals: {
                 totalDebit,
