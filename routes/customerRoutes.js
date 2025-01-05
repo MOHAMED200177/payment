@@ -20,6 +20,7 @@ router.
 
 router.
     route('/:id')
+    .get(customerController.oneCustomerId)
     .patch(customerController.updateCustomer)
     .delete(customerController.deleteCustomer);
 

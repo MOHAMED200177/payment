@@ -5,6 +5,7 @@ exports.allCustomer = Crud.getAll(Customer);
 exports.createCustomer = Crud.createOne(Customer);
 exports.updateCustomer = Crud.updateOne(Customer);
 exports.oneCustomer = Crud.getOneByName(Customer, 'invoice returns payment transactions');
+exports.oneCustomerId = Crud.getOneById(Customer);
 exports.deleteCustomer = Crud.deleteOne(Customer);
 
 exports.getCustomerStatement = async (req, res) => {

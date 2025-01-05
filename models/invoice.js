@@ -18,7 +18,7 @@ const invoiceSchema = new mongoose.Schema({
     status: { type: String, enum: ['Paid', 'Unpaid'] },
     refunds: { type: Number, default: 0 },
     discount: { type: Number, default: 0 },
-    invoiceNumber: { type: String, unique: true, required: true },
+    invoiceNumber: { type: String, unique: true },
     date: { type: Date, default: Date.now },
 });
 
@@ -28,12 +28,23 @@ invoiceSchema.pre('save', function (next) {
 });
 
 invoiceSchema.pre('save', async function (next) {
-    if (!this.isNew) return next(); // إذا كانت الفاتورة ليست جديدة، لا يتم التغيير
+    console.log('Pre-save middleware triggered'); // تسجيل الدخول إلى الميدلوير
 
-    const count = await mongoose.model('Invoice').countDocuments();
-    const year = new Date().getFullYear();
-    this.invoiceNumber = `INV-${year}-${String(count + 1).padStart(4, '0')}`; // تنسيق الرقم
-    next();
+    if (!this.isNew) {
+        console.log('Invoice is not new, skipping invoiceNumber generation');
+        return next();
+    }
+
+    try {
+        const count = await mongoose.model('Invoice').countDocuments();
+        const year = new Date().getFullYear();
+        this.invoiceNumber = `INV-${year}-${String(count + 1).padStart(4, '0')}`;
+        console.log('Generated invoiceNumber:', this.invoiceNumber);
+        next();
+    } catch (err) {
+        console.error('Error generating invoiceNumber:', err);
+        next(err);
+    }
 });
 
 module.exports = mongoose.model('Invoice', invoiceSchema);
