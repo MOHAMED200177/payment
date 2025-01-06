@@ -6,6 +6,12 @@ const transactionSchema = new mongoose.Schema({
     amount: Number,
     date: { type: Date, default: Date.now },
     details: String,
+    items: [{
+        product: { type: String, required: true },
+        quantity: { type: Number, required: true },
+        price: { type: Number, required: true },
+    }
+    ],
     status: { type: String, enum: ['debit', 'credit'], require: true },
     date: { type: Date, default: Date.now },
 });

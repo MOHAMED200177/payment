@@ -16,7 +16,6 @@ exports.addPayment = async (req, res) => {
     try {
         const { name, amount, invoiceId } = req.body;
 
-        // Find customer by name
         const customer = await Customer.findOne({ name }).session(session);
         if (!customer) {
             await session.abortTransaction();
@@ -24,51 +23,65 @@ exports.addPayment = async (req, res) => {
             return res.status(404).json({ message: 'Customer not found' });
         }
 
-        // Find invoice by ID
-        const invoice = await Invoice.findById(invoiceId).session(session);
-        if (!invoice) {
-            await session.abortTransaction();
-            session.endSession();
-            return res.status(404).json({ message: 'Invoice not found' });
+        let invoice = null;
+        let remaining = 0;
+
+        if (invoiceId) {
+            invoice = await Invoice.findById(invoiceId).session(session);
+            if (!invoice) {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(404).json({ message: 'Invoice not found' });
+            }
+
+            remaining = invoice.total - (invoice.paid || 0);
+            if (amount > remaining) {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(400).json({ message: `Payment exceeds remaining invoice amount. Remaining: ${remaining}` });
+            }
+        } else {
+            // إذا لم يكن هناك `invoiceId`، التحقق من رصيد العميل
+            if (amount > customer.outstandingBalance) {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(400).json({ message: `Payment exceeds outstanding balance. Remaining balance: ${customer.outstandingBalance}` });
+            }
         }
 
-        const remaining = invoice.total - (invoice.paid || 0);
-        if (amount > remaining) {
-            await session.abortTransaction();
-            session.endSession();
-            return res.status(400).json({ message: `Payment exceeds remaining invoice amount. Remaining: ${remaining}` });
-        }
-
-        // Create payment
+        // إنشاء الدفع
         const payment = new Payment({
             customer: customer.id,
             customerName: name,
             amount,
-            invoice: invoiceId,
+            invoice: invoice ? invoice.invoiceNumber : null,
         });
         await payment.save({ session });
 
-        // Create transaction
+        // إنشاء المعاملة
         const transaction = await Transaction.create([{
             type: 'payment',
-            referenceId: invoice._id,
+            referenceId: invoice ? invoice._id : null,
             amount,
-            details: `Payment of ${amount} for invoice ${invoice._id}`,
+            details: invoice ? `Payment of ${amount} for invoice ${invoice._id}` : `Payment of ${amount} against outstanding balance`,
             status: 'credit',
         }], { session });
 
-        // Update customer
+        // تحديث العميل
         customer.transactions.push(transaction[0]._id);
         customer.payment.push(payment._id);
+        customer.outstandingBalance -= amount;
         customer.balance -= amount;
         await customer.save({ session });
 
-        // Update invoice
-        invoice.paid = (invoice.paid || 0) + amount;
-        invoice.remaining -= amount;
-        await invoice.save({ session });
+        // إذا كانت الفاتورة موجودة، تحديثها
+        if (invoice) {
+            invoice.paid = (invoice.paid || 0) + amount;
+            invoice.remaining -= amount;
+            await invoice.save({ session });
+        }
 
-        // Commit transaction
+        // إنهاء العملية بنجاح
         await session.commitTransaction();
         session.endSession();
 
@@ -76,7 +89,7 @@ exports.addPayment = async (req, res) => {
             message: 'Payment added successfully',
         });
     } catch (error) {
-        // Rollback transaction
+        // التراجع عن التغييرات
         await session.abortTransaction();
         session.endSession();
         res.status(500).json({ message: error.message });

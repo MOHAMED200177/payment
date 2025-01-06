@@ -11,9 +11,7 @@ const paymentSchema = new mongoose.Schema({
         required: true
     },
     invoice: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Invoice',
-        required: true
+        type: String
     },
     amount: {
         type: Number,
@@ -33,7 +31,7 @@ const paymentSchema = new mongoose.Schema({
     transactionId: {
         type: String,
         unique: true,
-        sparse: true // Allows null values for cases without a transaction ID
+        sparse: true
     },
     date: {
         type: Date,

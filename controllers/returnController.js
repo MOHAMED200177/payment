@@ -86,6 +86,7 @@ exports.addReturn = async (req, res) => {
         // Update customer
         customer.transactions.push(refundTransaction._id);
         customer.returns.push(newReturn._id);
+        customer.outstandingBalance -= refundAmount;
         customer.balance -= refundAmount;
         await customer.save({ session });
 

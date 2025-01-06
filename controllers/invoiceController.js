@@ -86,21 +86,22 @@ exports.createInvoice = catchAsync(async (req, res, next) => {
 
         const remaining = totalAfterDiscount - amount;
 
+        const count = await mongoose.model('Invoice').countDocuments();
+        const invoiceNumber = count + 1;
+        const existingInvoice = await Invoice.findOne({ invoiceNumber });
+
+        if (existingInvoice) {
+            throw new AppError('Invoice number already exists, please try again.', 400);
+        }
 
         const invoice = new Invoice({
-
             customer: customer._id,
-
             items: updatedItems,
-
             total: totalAfterDiscount,
-
             paid: amount,
-
             remaining,
-
             discount: discountAmount,
-
+            invoiceNumber,
         });
 
         await invoice.save({ session });
@@ -114,6 +115,18 @@ exports.createInvoice = catchAsync(async (req, res, next) => {
                 referenceId: invoice._id,
                 amount: calculatedTotal,
                 details: `Invoice created with total ${calculatedTotal} for customer ${customer.name}`,
+                items: updatedItems.map(item => ({
+                    product: item.product,
+                    quantity: item.quantity,
+                    price: item.price,
+                })),
+                status: 'debit',
+            },
+            {
+                type: 'discount',
+                referenceId: invoice._id,
+                amount: -discountAmount,
+                details: `Invoice created with discount ${discount}% for customer ${customer.name}`,
                 status: 'debit',
             },
             {

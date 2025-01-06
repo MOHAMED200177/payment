@@ -80,7 +80,6 @@ exports.exportInvoicesToExcel = async (req, res) => {
     }
 };
 
-
 exports.fileCustomerStatement = async (req, res) => {
     try {
         const { name } = req.body;
@@ -106,6 +105,11 @@ exports.fileCustomerStatement = async (req, res) => {
                 totalCredit += transaction.amount;
             }
 
+            // Format items (if any) with a hyphen-separated list
+            const items = (transaction.items || [])
+                .map(item => `Product: ${item.product}, Qnt: ${item.quantity}, Price: ${item.price}`)
+                .join(' - ');
+
             return {
                 id: transaction._id,
                 type: transaction.type,
@@ -113,7 +117,8 @@ exports.fileCustomerStatement = async (req, res) => {
                 amount: transaction.amount,
                 details: transaction.details,
                 status: transaction.status,
-                date: transaction.date,
+                date: new Date(transaction.date).toLocaleDateString(), // Formatting date
+                items, // Add formatted items here
             };
         });
 
@@ -123,24 +128,44 @@ exports.fileCustomerStatement = async (req, res) => {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Customer Statement');
 
+        // Define columns with widths and styles
         worksheet.columns = [
-            { header: 'ID', key: 'id' },
-            { header: 'Type', key: 'type' },
-            { header: 'Reference ID', key: 'referenceId' },
-            { header: 'Amount', key: 'amount' },
-            { header: 'Details', key: 'details' },
-            { header: 'Status', key: 'status' },
-            { header: 'Date', key: 'date' },
+            { header: 'ID', key: 'id', width: 20 },
+            { header: 'Type', key: 'type', width: 15 },
+            { header: 'Reference ID', key: 'referenceId', width: 20 },
+            { header: 'Amount', key: 'amount', width: 15, style: { numFmt: '#,##0.00' } },
+            { header: 'Details', key: 'details', width: 30 },
+            { header: 'Status', key: 'status', width: 10 },
+            { header: 'Date', key: 'date', width: 15 },
+            { header: 'Items', key: 'items', width: 50 }, // Add items column
         ];
 
+        // Add transaction details to rows
         transactionDetails.forEach(transaction => {
             worksheet.addRow(transaction);
         });
 
+        // Add totals and balance
         worksheet.addRow({});
         worksheet.addRow({ id: 'Total Debit', amount: totalDebit });
         worksheet.addRow({ id: 'Total Credit', amount: totalCredit });
         worksheet.addRow({ id: 'Balance', amount: balance });
+
+        // Apply formatting
+        worksheet.eachRow((row, rowNumber) => {
+            row.eachCell((cell, colNumber) => {
+                cell.border = {
+                    top: { style: 'thin' },
+                    left: { style: 'thin' },
+                    bottom: { style: 'thin' },
+                    right: { style: 'thin' },
+                };
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                if (rowNumber === 1) {
+                    cell.font = { bold: true }; // Header row
+                }
+            });
+        });
 
         // Ensure exports directory exists
         const exportsDir = path.join(__dirname, '..', 'exports');

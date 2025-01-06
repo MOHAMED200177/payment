@@ -17,7 +17,10 @@ exports.getCustomerStatement = async (req, res) => {
         }
 
         // Fetch customer details
-        const customer = await Customer.findOne({ name }).populate('transactions').lean();
+        const customer = await Customer.findOne({ name })
+            .populate('transactions')
+            .lean();
+
         if (!customer) {
             return res.status(404).json({ message: 'Customer not found' });
         }
@@ -34,6 +37,14 @@ exports.getCustomerStatement = async (req, res) => {
                 totalCredit += transaction.amount;
             }
 
+            const itemsDetails = transaction.items
+                ? transaction.items.map(item => ({
+                    product: item.product,
+                    quantity: item.quantity,
+                    price: item.price,
+                }))
+                : [];
+
             return {
                 id: transaction._id,
                 type: transaction.type,
@@ -42,10 +53,11 @@ exports.getCustomerStatement = async (req, res) => {
                 details: transaction.details,
                 status: transaction.status,
                 date: transaction.date,
+                items: itemsDetails,
             };
         });
 
-        const balance = totalCredit - totalDebit;
+        const balance = totalDebit - totalCredit;
 
         res.status(200).json({
             customer: {
