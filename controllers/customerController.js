@@ -4,7 +4,7 @@ const Crud = require('./crudFactory');
 exports.allCustomer = Crud.getAll(Customer);
 exports.createCustomer = Crud.createOne(Customer);
 exports.updateCustomer = Crud.updateOne(Customer);
-exports.oneCustomer = Crud.getOneByName(Customer, 'invoice returns payment transactions');
+exports.oneCustomer = Crud.getOneByField(Customer, 'name', ['invoice', 'returns', 'payment', 'transactions']);
 exports.oneCustomerId = Crud.getOneById(Customer);
 exports.deleteCustomer = Crud.deleteOne(Customer);
 

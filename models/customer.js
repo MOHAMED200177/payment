@@ -14,7 +14,7 @@ const customerSchema = new mongoose.Schema({
     payment: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Payment' }],
     transactions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Transaction' }],
     date: { type: Date, default: Date.now },
-});
+}, { timestamps: true });
 
 customerSchema.index({ name: 1 }, { unique: true });
 

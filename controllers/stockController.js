@@ -1,7 +1,34 @@
 const Crud = require('./crudFactory');
 const Stock = require('../models/stock');
+const Product = require('../models/product');
 
-exports.creatStock = Crud.createOne(Stock);
+const AppError = require('../utils/appError');
+const catchAsync = require('../utils/catchAsync');
+
+exports.createStock = catchAsync(async (req, res, next) => {
+    const { productName, quantity, batchNumber, expiryDate } = req.body;
+
+    const product = await Product.findOne({ name: productName });
+
+    if (!product) {
+        return next(new AppError('No product found with that name', 404));
+    }
+
+    const stock = await Stock.create({
+        product: product._id,
+        quantity,
+        batchNumber,
+        expiryDate,
+    });
+
+    res.status(201).json({
+        status: 'success',
+        data: {
+            stock
+        }
+    });
+});
+
 exports.allStock = Crud.getAll(Stock);
 exports.updateStock = Crud.updateOne(Stock);
 exports.oneStock = Crud.getOneById(Stock);

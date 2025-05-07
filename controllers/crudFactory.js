@@ -51,7 +51,7 @@ exports.getOneById = (Model, popOptions) =>
     catchAsync(async (req, res, next) => {
         let query = Model.findById(req.params.id);
         if (popOptions) query = query.populate(popOptions);
-        const doc = await query;
+        const doc = await query.exec();
 
         if (!doc) {
             return next(new AppError('No document found with that ID', 404));
@@ -65,14 +65,20 @@ exports.getOneById = (Model, popOptions) =>
         });
     });
 
-exports.getOneByName = (Model, popOptions) =>
+exports.getOneByField = (Model, fieldName, popOptions) =>
     catchAsync(async (req, res, next) => {
-        let query = Model.findOne({ name: req.body.name });
+        const value = req.body[fieldName];
+        if (!value) {
+            return next(new AppError(`Please provide a value for field: ${fieldName}`, 400));
+        }
+
+        let query = Model.findOne({ [fieldName]: value });
         if (popOptions) query = query.populate(popOptions);
-        const doc = await query;
+
+        const doc = await query.exec();
 
         if (!doc) {
-            return next(new AppError('No document found with that name', 404));
+            return next(new AppError(`No ${Model.modelName} found with ${fieldName}: ${value}`, 404));
         }
 
         res.status(200).json({
@@ -82,6 +88,7 @@ exports.getOneByName = (Model, popOptions) =>
             }
         });
     });
+
 
 exports.getAll = Model =>
     catchAsync(async (req, res, next) => {

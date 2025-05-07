@@ -6,7 +6,7 @@ const stockController = require('../controllers/stockController');
 router.
     route('/')
     .get(stockController.allStock)
-    .post(stockController.creatStock);
+    .post(stockController.createStock);
 
 router.
     route('/:id')
