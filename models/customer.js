@@ -9,10 +9,10 @@ const customerSchema = new mongoose.Schema({
     balance: { type: Number, required: true, default: 0 },
     outstandingBalance: { type: Number, default: 0 },
     cash: { type: Number, default: 0 },
-    invoice: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Invoice' }],
-    returns: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Return' }],
-    payment: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Payment' }],
-    transactions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Transaction' }],
+    invoice: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Invoice', default: [] }],
+    returns: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Return', default: [] }],
+    payment: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Payment', default: [] }],
+    transactions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Transaction', default: [] }],
     date: { type: Date, default: Date.now },
 }, { timestamps: true });
 

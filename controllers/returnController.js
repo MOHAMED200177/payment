@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Return = require('../models/return');
 const Customer = require('../models/customer');
 const Stock = require('../models/stock');
+const Product = require('../models/product');
 const Invoice = require('../models/invoice');
 const Transaction = require('../models/transactions');
 const Crud = require('./crudFactory');
@@ -16,59 +17,66 @@ exports.addReturn = async (req, res) => {
     session.startTransaction();
 
     try {
-        const { invoiceId, productName, name, quantity, reason } = req.body;
+        const { invoiceNumber, productName, name, quantity, reason } = req.body;
 
         if (quantity <= 0) {
             throw new Error('Return quantity must be greater than zero.');
         }
 
-        const [customer, invoice, product] = await Promise.all([
+        const productDoc = await Product.findOne({ name: productName }).session(session);
+        if (!productDoc) throw new Error('Product not found.');
+
+        const [customer, invoice, stock] = await Promise.all([
             Customer.findOne({ name }).session(session),
-            Invoice.findById(invoiceId).session(session),
-            Stock.findOne({ product: productName }).session(session),
+            Invoice.findOne({ invoiceNumber }).session(session),
+            Stock.findOne({ product: productDoc._id }).session(session)
         ]);
 
         if (!customer) throw new Error('Customer not found.');
         if (!invoice) throw new Error('Invoice not found.');
-        if (!product) throw new Error('Product not found in stock.');
+        if (!stock) throw new Error('Product not found in stock.');
 
         const invoiceItem = invoice.items.find(
-            item => item.product_id.toString() === product._id.toString()
+            item => item.product.toString() === stock.product.toString()
         );
 
         if (!invoiceItem) throw new Error('Product not found in invoice.');
 
-        const totalReturnedQty = await Return.aggregate([
-            { $match: { invoice: invoice._id, product: product._id } },
-            { $group: { _id: null, total: { $sum: '$quantity' } } },
-        ]);
+        // Get all returns for this invoice and product
+        const returns = await Return.find({
+            invoice: invoice._id,
+            product: productDoc.name
+        }).session(session);
 
-        const alreadyReturnedQty = totalReturnedQty[0]?.total || 0;
+        // Sum total returned quantity using reduce
+        const alreadyReturnedQty = returns.reduce((total, ret) => total + ret.quantity, 0);
         const remainingQty = invoiceItem.quantity - alreadyReturnedQty;
 
         if (quantity > remainingQty) {
             throw new Error(`Return quantity exceeds the remaining quantity. Only ${remainingQty} can be returned.`);
         }
 
-        const refundAmount = invoiceItem.price * quantity;
+        const refundAmount = invoiceItem.unitPrice * quantity;
 
         // Update stock
-        product.quantity += quantity;
+        stock.quantity += quantity;
 
         // Create return record
         const returnDoc = new Return({
             invoice: invoice._id,
             customer: customer._id,
-            product: product._id,
+            product: productDoc.name,
             quantity,
             reason,
         });
 
         // Update invoice
+        if (!invoice.returns) invoice.returns = [];
         invoice.returns.push(returnDoc._id);
         invoice.refunds = (invoice.refunds || 0) + refundAmount;
-        invoice.total = Math.max(0, invoice.total - refundAmount);
-        invoice.remaining = Math.max(0, invoice.remaining - refundAmount);
+        invoice.subtotal = Math.max(0, invoice.subtotal - refundAmount);
+        invoice.totalAmount = Math.max(0, invoice.totalAmount - refundAmount);
+        invoice.balanceDue = Math.max(0, invoice.balanceDue - refundAmount);
 
         // Create refund transaction
         const refundTransaction = new Transaction({
@@ -81,13 +89,14 @@ exports.addReturn = async (req, res) => {
 
         // Update customer
         customer.transactions.push(refundTransaction._id);
+        if (!customer.returns) customer.returns = [];
         customer.returns.push(returnDoc._id);
         customer.outstandingBalance = Math.max(0, (customer.outstandingBalance || 0) - refundAmount);
         customer.balance = Math.max(0, (customer.balance || 0) - refundAmount);
 
         // Save all changes in parallel
         await Promise.all([
-            product.save({ session }),
+            stock.save({ session }),
             returnDoc.save({ session }),
             invoice.save({ session }),
             refundTransaction.save({ session }),

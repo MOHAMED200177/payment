@@ -11,7 +11,9 @@ const paymentSchema = new mongoose.Schema({
         required: true
     },
     invoice: {
-        type: String
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Invoice',
+        required: true
     },
     amount: {
         type: Number,
@@ -27,11 +29,6 @@ const paymentSchema = new mongoose.Schema({
         type: String,
         enum: ['Success', 'Pending', 'Failed'],
         default: 'Pending'
-    },
-    transactionId: {
-        type: String,
-        unique: true,
-        sparse: true
     },
     date: {
         type: Date,

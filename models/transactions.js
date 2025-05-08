@@ -1,3 +1,4 @@
+const { required } = require('joi');
 const mongoose = require('mongoose');
 
 const transactionSchema = new mongoose.Schema({
@@ -12,7 +13,7 @@ const transactionSchema = new mongoose.Schema({
         price: { type: Number, required: true },
     }
     ],
-    status: { type: String, enum: ['debit', 'credit'], require: true },
+    status: { type: String, enum: ['debit', 'credit'], required: true },
     date: { type: Date, default: Date.now },
 });
 

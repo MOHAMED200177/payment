@@ -14,7 +14,7 @@ exports.addPayment = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
-        const { name, amount, invoiceId } = req.body;
+        const { name, amount, invoiceNumber } = req.body;
 
         const customer = await Customer.findOne({ name }).session(session);
         if (!customer) {
@@ -26,15 +26,15 @@ exports.addPayment = async (req, res) => {
         let invoice = null;
         let remaining = 0;
 
-        if (invoiceId) {
-            invoice = await Invoice.findById(invoiceId).session(session);
+        if (invoiceNumber) {
+            invoice = await Invoice.findOne({ invoiceNumber }).session(session);
             if (!invoice) {
                 await session.abortTransaction();
                 session.endSession();
                 return res.status(404).json({ message: 'Invoice not found' });
             }
 
-            remaining = invoice.total - (invoice.paid || 0);
+            remaining = invoice.balanceDue;
             if (amount > remaining) {
                 await session.abortTransaction();
                 session.endSession();
@@ -54,16 +54,16 @@ exports.addPayment = async (req, res) => {
             customer: customer.id,
             customerName: name,
             amount,
-            invoice: invoice ? invoice.invoiceNumber : null,
+            invoice: invoice ? invoice._id : null,
         });
         await payment.save({ session });
 
         // إنشاء المعاملة
         const transaction = await Transaction.create([{
             type: 'payment',
-            referenceId: invoice ? invoice._id : null,
+            referenceId: payment._id,
             amount,
-            details: invoice ? `Payment of ${amount} for invoice ${invoice._id}` : `Payment of ${amount} against outstanding balance`,
+            details: invoice ? `Payment of ${amount} for invoice ${invoice.invoiceNumber}` : `Payment of ${amount} against outstanding balance`,
             status: 'credit',
         }], { session });
 
@@ -76,8 +76,8 @@ exports.addPayment = async (req, res) => {
 
         // إذا كانت الفاتورة موجودة، تحديثها
         if (invoice) {
-            invoice.paid = (invoice.paid || 0) + amount;
-            invoice.remaining -= amount;
+            invoice.amountPaid = (invoice.amountPaid || 0) + amount;
+            invoice.balanceDue -= amount;
             await invoice.save({ session });
         }
 

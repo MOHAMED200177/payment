@@ -1,3 +1,4 @@
+const { number } = require('joi');
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
@@ -43,6 +44,11 @@ const invoiceSchema = new Schema({
         ref: 'Customer',
         required: true
     },
+    returns: [{
+        type: Schema.Types.ObjectId,
+        ref: 'Return',
+        default: []
+    }],
     issueDate: {
         type: Date,
         default: Date.now,
@@ -86,6 +92,10 @@ const invoiceSchema = new Schema({
         type: String,
         enum: ['draft', 'issued', 'paid', 'partially_paid', 'overdue', 'cancelled', 'refunded'],
         default: 'draft'
+    },
+    refunds: {
+        type: Number,
+        default: 0
     },
     paymentTerms: {
         type: String,
