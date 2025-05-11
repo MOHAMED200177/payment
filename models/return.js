@@ -1,8 +1,8 @@
 const mongoose = require('mongoose');
 
 const returnSchema = new mongoose.Schema({
-    invoice: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Invoice', required: true, default: [] }],
-    customer: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true, default: [] }],
+    invoice: { type: mongoose.Schema.Types.ObjectId, ref: 'Invoice', required: true },
+    customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
     product: { type: String, required: true },
     quantity: { type: Number, required: true, min: 1 },
     reason: { type: String },

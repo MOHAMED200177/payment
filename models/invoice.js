@@ -112,6 +112,7 @@ const invoiceSchema = new Schema({
     toJSON: { virtuals: true },
     toObject: { virtuals: true }
 });
+invoiceSchema.index({ invoiceNumber: 1 });
 
 // Virtual for formatted invoice number
 invoiceSchema.virtual('formattedInvoiceNumber').get(function () {

@@ -20,6 +20,7 @@ const stockRoutes = require('./routes/stockRoutes');
 const productRoutes = require('./routes/productRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
 const supplierRoutes = require('./routes/supplierRoutes');
+const salesRoutes = require('./routes/salesRoutes');
 
 
 app.use('/customers', customerRoutes);
@@ -30,6 +31,7 @@ app.use('/stock', stockRoutes);
 app.use('/product', productRoutes);
 app.use('/categories', categoryRoutes);
 app.use('/supplier', supplierRoutes);
+app.use('/sales', salesRoutes);
 
 app.use(globalErrorHandler);
 

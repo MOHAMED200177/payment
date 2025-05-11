@@ -17,6 +17,7 @@ const catchAsync = require('../utils/catchAsync');
 exports.allInvoives = Crud.getAll(Invoice);
 exports.updateInvoice = Crud.updateOne(Invoice);
 exports.oneInvoice = Crud.getOneById(Invoice, { path: 'customer', select: 'name' });
+exports.oneInvoiceByNum = Crud.getOneByField(Invoice, 'invoiceNumber', { path: 'items.product', select: 'name price productCode' });
 exports.deleteInvoice = Crud.deleteOne(Invoice);
 
 // Create new invoice

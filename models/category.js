@@ -8,7 +8,8 @@ const categorySchema = new mongoose.Schema({
         trim: true
     },
     description: {
-        type: String
+        type: String,
+        trim: true
     },
     parentCategory: {
         type: mongoose.Schema.Types.ObjectId,

@@ -4,6 +4,7 @@ const invoiceController = require('../controllers/invoiceController');
 
 // Create a new invoice
 router.post('/create', invoiceController.createInvoice);
+router.post('/info', invoiceController.oneInvoiceByNum);
 
 
 router.

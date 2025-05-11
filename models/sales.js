@@ -95,32 +95,32 @@ const salesOrderSchema = new mongoose.Schema({
 });
 
 // قبل الحفظ، حساب الاجماليات
-salesOrderSchema.pre('save', function (next) {
-    // حساب الإجمالي لكل عنصر
-    this.items.forEach(item => {
-        item.total = (item.quantity * item.unitPrice) * (1 - item.discount / 100) * (1 + item.tax / 100);
-    });
+// salesOrderSchema.pre('save', function (next) {
+//     // حساب الإجمالي لكل عنصر
+//     this.items.forEach(item => {
+//         item.total = (item.quantity * item.unitPrice) * (1 - item.discount / 100) * (1 + item.tax / 100);
+//     });
 
-    // حساب الإجمالي الفرعي (بدون ضرائب وخصومات إضافية)
-    this.subtotal = this.items.reduce((sum, item) => {
-        return sum + (item.quantity * item.unitPrice);
-    }, 0);
+//     // حساب الإجمالي الفرعي (بدون ضرائب وخصومات إضافية)
+//     this.subtotal = this.items.reduce((sum, item) => {
+//         return sum + (item.quantity * item.unitPrice);
+//     }, 0);
 
-    // حساب إجمالي الضرائب
-    this.taxAmount = this.items.reduce((sum, item) => {
-        return sum + (item.quantity * item.unitPrice * item.tax / 100);
-    }, 0);
+//     // حساب إجمالي الضرائب
+//     this.taxAmount = this.items.reduce((sum, item) => {
+//         return sum + (item.quantity * item.unitPrice * item.tax / 100);
+//     }, 0);
 
-    // حساب إجمالي الخصومات
-    this.discountAmount = this.items.reduce((sum, item) => {
-        return sum + (item.quantity * item.unitPrice * item.discount / 100);
-    }, 0);
+//     // حساب إجمالي الخصومات
+//     this.discountAmount = this.items.reduce((sum, item) => {
+//         return sum + (item.quantity * item.unitPrice * item.discount / 100);
+//     }, 0);
 
-    // حساب الإجمالي النهائي
-    this.totalAmount = this.subtotal + this.taxAmount - this.discountAmount;
+//     // حساب الإجمالي النهائي
+//     this.totalAmount = this.subtotal + this.taxAmount - this.discountAmount;
 
-    next();
-});
+//     next();
+// });
 
 const SalesOrder = mongoose.model('SalesOrder', salesOrderSchema);
 
