@@ -2,10 +2,12 @@ const Product = require('../models/product');
 const Supplier = require('../models/supplier');
 const Category = require('../models/category');
 const factory = require('./crudFactory');
+const AppError = require('../utils/appError');
+
 
 exports.createProduct = async (req, res, next) => {
     try {
-        const { category, supplier, name, productCode, price } = req.body;
+        const { category, supplier, name, productCode, costPrice, sellingPrice, unit  } = req.body;
 
 
         const categoryExists = await Category.findOne({ name: category });
@@ -23,7 +25,9 @@ exports.createProduct = async (req, res, next) => {
             supplier: supplierExists._id,
             name,
             productCode,
-            price
+            costPrice,
+            sellingPrice,
+            unit
         });
 
         res.status(201).json({
