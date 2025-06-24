@@ -5,6 +5,7 @@ const returnSchema = new mongoose.Schema({
     customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
     product: { type: String, required: true },
     quantity: { type: Number, required: true, min: 1 },
+    refundAmount: { type: Number, required: true},
     reason: { type: String },
     date: { type: Date, default: Date.now },
 });

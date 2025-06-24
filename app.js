@@ -22,10 +22,9 @@ const categoryRoutes = require('./routes/categoryRoutes');
 const supplierRoutes = require('./routes/supplierRoutes');
 const salesRoutes = require('./routes/salesRoutes');
 
-
 app.use('/customers', customerRoutes);
 app.use('/invoices', invoiceRoutes);
-app.use('/pay', paymentRoutes);
+app.use('/payment', paymentRoutes);
 app.use('/return', returnRoutes);
 app.use('/stock', stockRoutes);
 app.use('/product', productRoutes);

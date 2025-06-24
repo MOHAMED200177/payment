@@ -6,15 +6,12 @@ const invoiceController = require('../controllers/invoiceController');
 router.post('/create', invoiceController.createInvoice);
 router.post('/info', invoiceController.oneInvoiceByNum);
 
+router.route('/').get(invoiceController.allInvoices);
 
-router.
-    route('/')
-    .get(invoiceController.allInvoives)
-
-router.
-    route('/:id')
-    .get(invoiceController.oneInvoice)
-    .patch(invoiceController.updateInvoice)
-    .delete(invoiceController.deleteInvoice);
+router
+  .route('/:id')
+  .get(invoiceController.oneInvoice)
+  .patch(invoiceController.updateInvoice)
+  .delete(invoiceController.deleteInvoice);
 
 module.exports = router;
