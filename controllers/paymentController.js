@@ -12,6 +12,9 @@ exports.updatePayment = Crud.updateOne(Payment);
 exports.onePayment = Crud.getOneById(Payment);
 exports.deletePayment = Crud.deleteOne(Payment);
 
+
+
+
 exports.addPayment = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
