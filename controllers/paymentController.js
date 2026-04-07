@@ -3,114 +3,146 @@ const Payment = require('../models/payment');
 const Invoice = require('../models/invoice');
 const Customer = require('../models/customer');
 const Transaction = require('../models/transactions');
+const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
-
 const Crud = require('./crudFactory');
 
-exports.allPayment = Crud.getAll(Payment);
-exports.updatePayment = Crud.updateOne(Payment);
-exports.onePayment = Crud.getOneById(Payment);
-exports.deletePayment = Crud.deleteOne(Payment);
+// ============================================================
+// Populate Options
+// ============================================================
+const paymentPopulateOptions = [
+  { path: 'customer', select: 'name email phone' },
+  { path: 'invoice', select: 'invoiceNumber totalAmount balanceDue' },
+];
 
+// ============================================================
+// Basic CRUD
+// ============================================================
+exports.allPayment = Crud.getAll(Payment, paymentPopulateOptions);
+exports.onePayment = Crud.getOneById(Payment, paymentPopulateOptions);
 
+// ============================================================
+// Add Payment
+// ============================================================
+exports.addPayment = catchAsync(async (req, res, next) => {
+  // ✅ 1 - Validate قبل فتح Session
+  const { name, amount, invoiceNumber } = req.body;
 
+  if (!name || !amount) {
+    return next(new AppError('Customer name and amount are required', 400));
+  }
 
-exports.addPayment = async (req, res) => {
+  if (amount <= 0) {
+    return next(new AppError('Payment amount must be positive', 400));
+  }
+
+  // ✅ 2 - افتح الـ Session بعد الـ Validation
   const session = await mongoose.startSession();
   session.startTransaction();
+
   try {
-    const { name, amount, invoiceNumber } = req.body;
-    if (!name || !amount) {
-      throw new AppError('Customer name and amount are required', 400);
-    }
-
-    if (amount <= 0) {
-      throw new AppError('Payment amount must be positive', 400);
-    }
-
+    // ─────────────────────────────────────
+    // Find Customer
+    // ─────────────────────────────────────
     const customer = await Customer.findOne({ name }).session(session);
     if (!customer) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(404).json({ message: 'Customer not found' });
+      throw new AppError('Customer not found', 404);
     }
 
+    // ─────────────────────────────────────
+    // Find Invoice (if provided)
+    // ─────────────────────────────────────
     let invoice = null;
-    let remaining = 0;
 
     if (invoiceNumber) {
       invoice = await Invoice.findOne({ invoiceNumber }).session(session);
+
       if (!invoice) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(404).json({ message: 'Invoice not found' });
+        throw new AppError('Invoice not found', 404);
       }
 
+      // ✅ التحقق إن الفاتورة تبع العميل ده
       if (invoice.customer.toString() !== customer._id.toString()) {
         throw new AppError('Invoice does not belong to this customer', 400);
       }
 
-      remaining = invoice.balanceDue;
-      if (amount > remaining) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(400).json({
-          message: `Payment exceeds remaining invoice amount. Remaining: ${remaining}`,
-        });
+      // ✅ التحقق من الـ balance
+      if (invoice.balanceDue <= 0) {
+        throw new AppError('Invoice is already fully paid', 400);
+      }
+
+      if (amount > invoice.balanceDue) {
+        throw new AppError(
+          `Payment exceeds remaining invoice amount. Remaining: ${invoice.balanceDue}`,
+          400
+        );
       }
     } else {
-      // إذا لم يكن هناك `invoiceId`، التحقق من رصيد العميل
+      // ✅ لو مفيش invoice - تحقق من الـ outstanding balance
+      if (customer.outstandingBalance <= 0) {
+        throw new AppError('Customer has no outstanding balance', 400);
+      }
+
       if (amount > customer.outstandingBalance) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(400).json({
-          message: `Payment exceeds outstanding balance. Remaining balance: ${customer.outstandingBalance}`,
-        });
+        throw new AppError(
+          `Payment exceeds outstanding balance. Remaining: ${customer.outstandingBalance}`,
+          400
+        );
       }
     }
 
-    // إنشاء الدفع
+    // ─────────────────────────────────────
+    // Create Payment
+    // ─────────────────────────────────────
     const payment = new Payment({
-      customer: customer.id,
+      customer: customer._id,
       customerName: name,
       amount,
       invoice: invoice ? invoice._id : null,
+      status: 'Success', // ✅ متطابق مع الـ Payment Model
+      method: 'Cash', // ✅ default
     });
     await payment.save({ session });
 
-    // إنشاء المعاملة
-    const transaction = await Transaction.create(
+    // ─────────────────────────────────────
+    // Create Transaction
+    // ─────────────────────────────────────
+    const [transaction] = await Transaction.create(
       [
         {
           type: 'payment',
           referenceId: payment._id,
           amount,
           details: invoice
-            ? `Payment of ${amount} for invoice ${invoice.invoiceNumber}`
+            ? `Payment of ${amount} for invoice #${invoice.invoiceNumber}`
             : `Payment of ${amount} against outstanding balance`,
+          items: [],
           status: 'credit',
         },
       ],
       { session }
     );
 
-    // تحديث العميل
-    customer.transactions.push(transaction[0]._id);
+    // ─────────────────────────────────────
+    // Update Customer
+    // ─────────────────────────────────────
+    customer.transactions.push(transaction._id);
     customer.payment.push(payment._id);
     customer.outstandingBalance -= amount;
     customer.balance -= amount;
     await customer.save({ session });
 
-    // إذا كانت الفاتورة موجودة، تحديثها
+    // ─────────────────────────────────────
+    // Update Invoice (if provided)
+    // الـ pre save في الـ Invoice Model هيتكلف بتحديث الـ status
+    // ─────────────────────────────────────
     if (invoice) {
       invoice.amountPaid = (invoice.amountPaid || 0) + amount;
       invoice.balanceDue -= amount;
       await invoice.save({ session });
     }
 
-    // إنهاء العملية بنجاح
     await session.commitTransaction();
-    session.endSession();
 
     res.status(201).json({
       status: 'success',
@@ -122,141 +154,139 @@ exports.addPayment = async (req, res) => {
       },
     });
   } catch (error) {
-    // التراجع عن التغييرات
     await session.abortTransaction();
+    if (error instanceof AppError) return next(error);
+    console.error('Payment creation error:', error);
+    next(new AppError('Something went wrong during payment creation', 500));
+  } finally {
     session.endSession();
-    res.status(500).json({ message: error.message });
   }
-};
+});
 
-// Update payment
-
+// ============================================================
+// Update Payment
+// ============================================================
 exports.updatePayment = catchAsync(async (req, res, next) => {
-  const session = await mongoose.startSession();
+  // ✅ 1 - Validate قبل فتح Session
+  const { amount, method, notes } = req.body;
 
+  if (!amount) {
+    return next(new AppError('Amount is required', 400));
+  }
+
+  if (amount <= 0) {
+    return next(new AppError('Payment amount must be positive', 400));
+  }
+
+  // ✅ method validation متطابق مع الـ Payment Model
+  const VALID_METHODS = ['Cash', 'Credit Card', 'Bank Transfer', 'Other'];
+  if (method && !VALID_METHODS.includes(method)) {
+    return next(
+      new AppError(
+        `Invalid payment method. Must be one of: ${VALID_METHODS.join(', ')}`,
+        400
+      )
+    );
+  }
+
+  // ✅ 2 - افتح الـ Session بعد الـ Validation
+  const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const { amount, paymentMethod, notes } = req.body;
-
     const paymentId = req.params.id;
 
-    // Get original payment
-
+    // ─────────────────────────────────────
+    // Get Original Payment
+    // ─────────────────────────────────────
     const originalPayment = await Payment.findById(paymentId)
-
       .populate('customer')
-
       .populate('invoice')
-
       .session(session);
 
     if (!originalPayment) {
       throw new AppError('Payment not found', 404);
     }
 
-    // Check if payment is already processed (optional business rule)
-
-    if (originalPayment.status === 'processed') {
-      throw new AppError('Cannot update processed payment', 400);
+    // ✅ متطابق مع الـ Payment Model enum
+    if (originalPayment.status === 'Failed') {
+      throw new AppError('Cannot update failed payment', 400);
     }
 
     const oldAmount = originalPayment.amount;
-
     const amountDifference = amount - oldAmount;
 
-    // Validate new amount
-
-    if (amount <= 0) {
-      throw new AppError('Payment amount must be positive', 400);
-    }
-
-    // If payment is for an invoice, check constraints
-
+    // ─────────────────────────────────────
+    // Validate Against Invoice Balance
+    // ─────────────────────────────────────
     if (originalPayment.invoice) {
       const invoice = originalPayment.invoice;
-
       const newInvoiceBalance = invoice.balanceDue - amountDifference;
 
       if (newInvoiceBalance < 0) {
-        throw new AppError('Payment would exceed invoice total amount', 400);
+        throw new AppError(
+          `Payment would exceed invoice total. Max allowed: ${invoice.balanceDue + oldAmount}`,
+          400
+        );
       }
     }
 
-    // Check customer balance constraints
-
+    // ─────────────────────────────────────
+    // Validate Against Customer Balance
+    // ─────────────────────────────────────
     const customer = originalPayment.customer;
-
     const newCustomerBalance = customer.outstandingBalance - amountDifference;
 
     if (newCustomerBalance < 0) {
       throw new AppError(
-        'Payment would result in negative customer balance',
+        `Payment would result in negative customer balance. Max allowed: ${customer.outstandingBalance + oldAmount}`,
         400
       );
     }
 
-    // Update payment
-
+    // ─────────────────────────────────────
+    // Update Payment
+    // ─────────────────────────────────────
     originalPayment.amount = amount;
-
-    if (paymentMethod) originalPayment.paymentMethod = paymentMethod;
-
+    if (method) originalPayment.method = method; // ✅ method مش paymentMethod
     if (notes !== undefined) originalPayment.notes = notes;
-
-    originalPayment.updatedAt = new Date();
 
     await originalPayment.save({ session });
 
-    // Update transaction
-
+    // ─────────────────────────────────────
+    // Update Transaction
+    // ─────────────────────────────────────
     await Transaction.updateOne(
       {
         referenceId: paymentId,
-
         type: 'payment',
       },
-
       {
-        amount,
-
-        details: originalPayment.invoice
-          ? `Payment of ${amount} for invoice #${originalPayment.invoice.invoiceNumber} (Updated)`
-          : `Payment of ${amount} against outstanding balance (Updated)`,
-
-        updatedAt: new Date(),
+        $set: {
+          amount,
+          details: originalPayment.invoice
+            ? `Payment of ${amount} for invoice #${originalPayment.invoice.invoiceNumber} (Updated)`
+            : `Payment of ${amount} against outstanding balance (Updated)`,
+        },
       },
-
       { session }
     );
 
-    // Update customer balance
-
+    // ─────────────────────────────────────
+    // Update Customer Balance
+    // ─────────────────────────────────────
     customer.outstandingBalance -= amountDifference;
-
     customer.balance -= amountDifference;
-
     await customer.save({ session });
 
-    // Update invoice if applicable
-
+    // ─────────────────────────────────────
+    // Update Invoice (if applicable)
+    // الـ pre save في الـ Invoice Model هيتكلف بتحديث الـ status
+    // ─────────────────────────────────────
     if (originalPayment.invoice) {
       const invoice = originalPayment.invoice;
-
       invoice.amountPaid += amountDifference;
-
       invoice.balanceDue -= amountDifference;
-
-      // Update invoice status
-
-      if (invoice.balanceDue === 0) {
-        invoice.status = 'paid';
-      } else if (invoice.amountPaid > 0) {
-        invoice.status = 'partial';
-      } else {
-        invoice.status = 'unpaid';
-      }
-
       await invoice.save({ session });
     }
 
@@ -264,55 +294,48 @@ exports.updatePayment = catchAsync(async (req, res, next) => {
 
     res.status(200).json({
       status: 'success',
-
       message: 'Payment updated successfully',
-
       data: {
         payment: originalPayment,
-
         previousAmount: oldAmount,
-
         newAmount: amount,
-
         amountDifference,
       },
     });
   } catch (error) {
     await session.abortTransaction();
-
-    throw error;
+    if (error instanceof AppError) return next(error);
+    console.error('Payment update error:', error);
+    next(new AppError('Something went wrong during payment update', 500));
   } finally {
     session.endSession();
   }
 });
 
-// Delete payment
-
+// ============================================================
+// Delete Payment
+// ============================================================
 exports.deletePayment = catchAsync(async (req, res, next) => {
   const session = await mongoose.startSession();
-
   session.startTransaction();
 
   try {
     const paymentId = req.params.id;
 
-    // Get payment with related data
-
+    // ─────────────────────────────────────
+    // Get Payment
+    // ─────────────────────────────────────
     const payment = await Payment.findById(paymentId)
-
       .populate('customer')
-
       .populate('invoice')
-
       .session(session);
 
     if (!payment) {
       throw new AppError('Payment not found', 404);
     }
 
-    // Check if payment can be deleted (business rule)
-
-    const paymentAge = (Date.now() - payment.createdAt) / (1000 * 60 * 60 * 24); // Days
+    // ✅ Business Rule - مش تحذف payment بعد 30 يوم
+    const paymentAge = (Date.now() - payment.createdAt) / (1000 * 60 * 60 * 24);
 
     if (paymentAge > 30) {
       throw new AppError('Cannot delete payments older than 30 days', 400);
@@ -320,23 +343,19 @@ exports.deletePayment = catchAsync(async (req, res, next) => {
 
     const { amount, customer, invoice } = payment;
 
-    // Revert customer balance
-
+    // ─────────────────────────────────────
+    // Revert Customer Balance
+    // ─────────────────────────────────────
     customer.outstandingBalance += amount;
-
     customer.balance += amount;
-
-    // Remove payment reference from customer
 
     customer.payment = customer.payment.filter(
       (p) => p.toString() !== paymentId
     );
 
-    // Remove transaction reference
-
+    // ✅ إزالة الـ transaction من العميل
     const transaction = await Transaction.findOne({
       referenceId: paymentId,
-
       type: 'payment',
     }).session(session);
 
@@ -348,36 +367,23 @@ exports.deletePayment = catchAsync(async (req, res, next) => {
 
     await customer.save({ session });
 
-    // Revert invoice if applicable
-
+    // ─────────────────────────────────────
+    // Revert Invoice (if applicable)
+    // الـ pre save في الـ Invoice Model هيتكلف بتحديث الـ status
+    // ─────────────────────────────────────
     if (invoice) {
       invoice.amountPaid -= amount;
-
       invoice.balanceDue += amount;
-
-      // Update invoice status
-
-      if (invoice.amountPaid === 0) {
-        invoice.status = 'unpaid';
-      } else {
-        invoice.status = 'partial';
-      }
-
       await invoice.save({ session });
     }
 
-    // Delete transaction
-
+    // ─────────────────────────────────────
+    // Delete Transaction & Payment
+    // ─────────────────────────────────────
     await Transaction.deleteOne(
-      {
-        referenceId: paymentId,
-
-        type: 'payment',
-      },
+      { referenceId: paymentId, type: 'payment' },
       { session }
     );
-
-    // Delete payment
 
     await Payment.findByIdAndDelete(paymentId, { session });
 
@@ -385,70 +391,70 @@ exports.deletePayment = catchAsync(async (req, res, next) => {
 
     res.status(200).json({
       status: 'success',
-
       message: 'Payment deleted successfully',
-
       data: {
         deletedAmount: amount,
-
         updatedCustomerBalance: customer.outstandingBalance,
-
         updatedInvoiceBalance: invoice ? invoice.balanceDue : null,
       },
     });
   } catch (error) {
     await session.abortTransaction();
-
-    throw error;
+    if (error instanceof AppError) return next(error);
+    console.error('Payment deletion error:', error);
+    next(new AppError('Something went wrong during payment deletion', 500));
   } finally {
     session.endSession();
   }
 });
 
-// Get payments by customer
-
+// ============================================================
+// Get Customer Payments
+// ============================================================
 exports.getCustomerPayments = catchAsync(async (req, res, next) => {
   const { customerId } = req.params;
 
   const page = parseInt(req.query.page) || 1;
-
   const limit = parseInt(req.query.limit) || 10;
-
   const skip = (page - 1) * limit;
 
+  // ─────────────────────────────────────
+  // Find Customer
+  // ─────────────────────────────────────
   const customer = await Customer.findById(customerId);
-
   if (!customer) {
     return next(new AppError('Customer not found', 404));
   }
 
+  // ─────────────────────────────────────
+  // Get Payments & Total
+  // ─────────────────────────────────────
   const [payments, total] = await Promise.all([
     Payment.find({ customer: customerId })
-
-      .populate('invoice', 'invoiceNumber totalAmount')
-
+      .populate('invoice', 'invoiceNumber totalAmount balanceDue status')
       .sort('-createdAt')
-
       .skip(skip)
-
       .limit(limit),
 
     Payment.countDocuments({ customer: customerId }),
   ]);
 
+  // ─────────────────────────────────────
+  // Get Stats
+  // ✅ new mongoose.Types.ObjectId بدل mongoose.Types.ObjectId()
+  // ─────────────────────────────────────
   const stats = await Payment.aggregate([
-    { $match: { customer: mongoose.Types.ObjectId(customerId) } },
-
+    {
+      $match: {
+        customer: new mongoose.Types.ObjectId(customerId),
+      },
+    },
     {
       $group: {
         _id: null,
-
         totalPaid: { $sum: '$amount' },
-
         paymentCount: { $sum: 1 },
-
         avgPayment: { $avg: '$amount' },
-
         lastPaymentDate: { $max: '$createdAt' },
       },
     },
@@ -456,35 +462,23 @@ exports.getCustomerPayments = catchAsync(async (req, res, next) => {
 
   res.status(200).json({
     status: 'success',
-
     results: payments.length,
-
     pagination: {
       page,
-
       limit,
-
       total,
-
       pages: Math.ceil(total / limit),
     },
-
     customerInfo: {
       name: customer.name,
-
       outstandingBalance: customer.outstandingBalance,
-
       statistics: stats[0] || {
         totalPaid: 0,
-
         paymentCount: 0,
-
         avgPayment: 0,
-
         lastPaymentDate: null,
       },
     },
-
     data: payments,
   });
 });

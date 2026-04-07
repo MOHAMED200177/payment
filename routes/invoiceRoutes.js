@@ -8,6 +8,8 @@ router.post('/info', invoiceController.oneInvoiceByNum);
 
 router.route('/').get(invoiceController.allInvoices);
 
+router.patch('/:id/status', invoiceController.updateInvoiceStatus);
+
 router
   .route('/:id')
   .get(invoiceController.oneInvoice)

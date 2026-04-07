@@ -14,16 +14,33 @@ const getNextSequence = require('../utils/getNextSequence');
 const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
 
-const invoicePopulateOptions = [
-  { path: 'customer', select: 'name email phone' }, // جلب اسم العميل وبريده وهاتفه
 
-  { path: 'items.product', select: 'name productCode' }, // جلب اسم المنتج وكوده
+
+const invoicePopulateOptions = [
+  { path: 'customer', select: 'name email phone' },
+  { path: 'items.product', select: 'name productCode' },
 ];
-// Basic CRUD Operations
+
+
 exports.allInvoices = Crud.getAll(Invoice, invoicePopulateOptions);
-exports.oneInvoice = Crud.getOneById(Invoice, {
-  path: 'customer',
-  select: 'name email phone',
+
+/** Full invoice detail for ERP UI — customer + line products */
+exports.oneInvoice = catchAsync(async (req, res, next) => {
+  const doc = await Invoice.findById(req.params.id)
+    .populate({ path: 'customer', select: 'name email phone address' })
+    .populate({
+      path: 'items.product',
+      select: 'name productCode sellingPrice unit taxes costPrice',
+    });
+
+  if (!doc) {
+    return next(new AppError('No document found with that ID', 404));
+  }
+
+  res.status(200).json({
+    status: 'success',
+    data: { data: doc },
+  });
 });
 
 exports.oneInvoiceByNum = Crud.getOneByField(Invoice, 'invoiceNumber', {
@@ -31,26 +48,187 @@ exports.oneInvoiceByNum = Crud.getOneByField(Invoice, 'invoiceNumber', {
   select: 'name price productCode email phone',
 });
 
-// Create new invoice
+
+const getProductsAndStocks = async (items, session) => {
+  const productNames = items.map((item) => item.product);
+
+  const products = await Product.find({
+    name: { $in: productNames },
+  }).session(session);
+
+  if (products.length !== productNames.length) {
+    const foundNames = products.map((p) => p.name);
+    const missing = productNames.filter((n) => !foundNames.includes(n));
+    throw new AppError(`Products not found: ${missing.join(', ')}`, 404);
+  }
+
+  const productMap = new Map(products.map((p) => [p.name, p]));
+  const productIds = products.map((p) => p._id);
+
+  const stocks = await Stock.find({ product: { $in: productIds } })
+    .populate('product')
+    .session(session);
+
+  const stockMap = new Map(stocks.map((s) => [s.product._id.toString(), s]));
+
+  return { productMap, stockMap };
+};
+
+
+const processInvoiceItems = (items, productMap, stockMap) => {
+  const processedItems = [];
+  const stockUpdates = [];
+  let subtotal = 0;
+
+  for (const item of items) {
+    if (item.quantity <= 0 || !Number.isInteger(item.quantity)) {
+      throw new AppError(`Invalid quantity for product: ${item.product}`, 400);
+    }
+
+    const product = productMap.get(item.product);
+    if (!product) {
+      throw new AppError(`Product not found: ${item.product}`, 404);
+    }
+
+    const stock = stockMap.get(product._id.toString());
+    if (!stock) {
+      throw new AppError(`Stock not found for product: ${item.product}`, 404);
+    }
+
+    if (stock.quantity < item.quantity) {
+      throw new AppError(
+        `Insufficient stock for ${product.name}. Available: ${stock.quantity}`,
+        400
+      );
+    }
+
+    const lineTotal = product.sellingPrice * item.quantity;
+    subtotal += lineTotal;
+
+    processedItems.push({
+      product: product._id,
+      quantity: item.quantity,
+      unitPrice: product.sellingPrice,
+      taxRate: product.taxes || 0,
+      lineTotal,
+    });
+
+    stockUpdates.push({
+      updateOne: {
+        filter: { _id: stock._id },
+        update: {
+          $inc: { quantity: -item.quantity },
+          $set: { lastStockUpdate: new Date() },
+        },
+      },
+    });
+  }
+
+  return { processedItems, stockUpdates, subtotal };
+};
+
+/**
+ * حساب الـ discount والـ totals
+ */
+const calculateTotals = (subtotal, discount, amount) => {
+  let discountAmount = 0;
+
+  if (discount) {
+    if (discount < 0 || discount > 100) {
+      throw new AppError('Discount must be between 0 and 100.', 400);
+    }
+    discountAmount = subtotal * (discount / 100);
+  }
+
+  const totalAfterDiscount = subtotal - discountAmount;
+
+  if (amount > totalAfterDiscount) {
+    throw new AppError(
+      `Payment amount (${amount}) exceeds total invoice amount (${totalAfterDiscount})`,
+      400
+    );
+  }
+
+  const remaining = totalAfterDiscount - amount;
+
+  return { discountAmount, totalAfterDiscount, remaining };
+};
+
+/**
+ * بناء الـ transactions array
+ */
+const buildTransactions = (
+  invoice,
+  subtotal,
+  discountAmount,
+  discount,
+  amount
+) => {
+  const transactions = [
+    {
+      type: 'invoice',
+      referenceId: invoice._id,
+      amount: subtotal,
+      details: `Invoice #${invoice.formattedInvoiceNumber} created with total ${subtotal}`,
+      items: invoice.items.map((item) => ({
+        product: item.product,
+        quantity: item.quantity,
+        price: item.unitPrice,
+      })),
+      status: 'debit',
+    },
+  ];
+
+  if (discountAmount > 0) {
+    transactions.push({
+      type: 'discount',
+      referenceId: invoice._id,
+      amount: discountAmount,
+      details: `Discount of ${discount}% applied to invoice #${invoice.formattedInvoiceNumber}`,
+      items: [],
+      status: 'credit',
+    });
+  }
+
+  if (amount > 0) {
+    transactions.push({
+      type: 'payment',
+      referenceId: invoice._id,
+      amount,
+      details: `Payment of ${amount} received for invoice #${invoice.formattedInvoiceNumber}`,
+      items: [],
+      status: 'credit',
+    });
+  }
+
+  return transactions;
+};
+
+// ============================================================
+// Create Invoice
+// ============================================================
 exports.createInvoice = catchAsync(async (req, res, next) => {
+  // ✅ 1 - Validate قبل فتح Session
+  const { error } = invoiceSchema.validate(req.body, { abortEarly: false });
+  if (error) {
+    const messages = error.details.map((d) => d.message).join(', ');
+    return next(new AppError(messages, 400));
+  }
+
+  const { name, email, phone, items, amount, discount } = req.body;
+
+  if (amount < 0) {
+    return next(new AppError('Payment amount cannot be negative', 400));
+  }
+
+  // ✅ 2 - افتح الـ Session بعد الـ Validation
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const { name, email, phone, items, amount, discount } = req.body;
-
-    // Validation
-    const { error } = invoiceSchema.validate(req.body, { abortEarly: false });
-    if (error) {
-      const messages = error.details.map((detail) => detail.message).join(', ');
-      throw new AppError(messages, 400);
-    }
-
-    if (amount < 0) {
-      throw new AppError('Payment amount cannot be negative', 400);
-    }
-
-    // Handle customer
+    // ─────────────────────────────────────
+    // Handle Customer
+    // ─────────────────────────────────────
     let customer = await Customer.findOne({ name }).session(session);
 
     if (!customer) {
@@ -77,98 +255,32 @@ exports.createInvoice = catchAsync(async (req, res, next) => {
       }
     }
 
-    // Process items and calculate totals
-    const processedItems = [];
-    const stockUpdates = [];
-    let subtotal = 0;
-
-    const productNames = items.map((item) => item.product);
-    const products = await Product.find({
-      name: { $in: productNames },
-    }).session(session);
-
-    if (products.length !== productNames.length) {
-      const foundNames = products.map((p) => p.name);
-      const missing = productNames.filter((name) => !foundNames.includes(name));
-      throw new AppError(`Products not found: ${missing.join(', ')}`, 404);
-    }
-
-    const productMap = new Map(products.map((p) => [p.name, p]));
-    const productIds = products.map((p) => p._id);
-    const stocks = await Stock.find({ product: { $in: productIds } })
-      .populate('product')
-      .session(session);
-    const stockMap = new Map(stocks.map((s) => [s.product._id.toString(), s]));
-
-    for (const item of items) {
-      if (item.quantity <= 0 || !Number.isInteger(item.quantity)) {
-        throw new AppError(
-          `Invalid quantity for product: ${item.product}`,
-          400
-        );
-      }
-
-      const product = productMap.get(item.product);
-      if (!product)
-        throw new AppError(`Product not found: ${item.product}`, 404);
-
-      const stock = stockMap.get(product._id.toString());
-      if (!stock)
-        throw new AppError(`Stock not found for product: ${item.product}`, 404);
-
-      if (stock.quantity < item.quantity) {
-        throw new AppError(
-          `Insufficient stock for ${product.name}. Available: ${stock.quantity}`,
-          400
-        );
-      }
-
-      const lineTotal = product.sellingPrice * item.quantity;
-      subtotal += lineTotal;
-
-      processedItems.push({
-        product: product._id,
-        quantity: item.quantity,
-        unitPrice: product.sellingPrice,
-        taxRate: product.taxes || 0,
-        lineTotal,
-      });
-
-      stockUpdates.push({
-        updateOne: {
-          filter: { _id: stock._id },
-          update: {
-            $inc: { quantity: -item.quantity },
-            $set: { lastStockUpdate: new Date() },
-          },
-        },
-      });
-    }
+    // ─────────────────────────────────────
+    // Process Items & Update Stock
+    // ─────────────────────────────────────
+    const { productMap, stockMap } = await getProductsAndStocks(items, session);
+    const { processedItems, stockUpdates, subtotal } = processInvoiceItems(
+      items,
+      productMap,
+      stockMap
+    );
 
     if (stockUpdates.length > 0) {
       await Stock.bulkWrite(stockUpdates, { session });
     }
 
-    // Calculate discount and totals
-    let discountAmount = 0;
-    if (discount) {
-      if (discount < 0 || discount > 100) {
-        throw new AppError('Discount must be between 0 and 100.', 400);
-      }
-      discountAmount = subtotal * (discount / 100);
-    }
+    // ─────────────────────────────────────
+    // Calculate Totals
+    // ─────────────────────────────────────
+    const { discountAmount, totalAfterDiscount, remaining } = calculateTotals(
+      subtotal,
+      discount,
+      amount
+    );
 
-    const totalAfterDiscount = subtotal - discountAmount;
-    if (amount > totalAfterDiscount) {
-      throw new AppError(
-        `Payment amount (${amount}) exceeds total invoice amount (${totalAfterDiscount})`,
-        400
-      );
-    }
-
-    const remaining = totalAfterDiscount - amount;
-
+    // ─────────────────────────────────────
     // Generate Invoice Number
+    // ─────────────────────────────────────
     let invoiceNumber;
     try {
       invoiceNumber = await getNextSequence('invoice', session);
@@ -180,7 +292,9 @@ exports.createInvoice = catchAsync(async (req, res, next) => {
     const dueDate = new Date(issueDate);
     dueDate.setDate(dueDate.getDate() + 30);
 
-    // Create invoice
+    // ─────────────────────────────────────
+    // Create Invoice
+    // ─────────────────────────────────────
     const invoice = new Invoice({
       invoiceNumber,
       customer: customer._id,
@@ -198,20 +312,32 @@ exports.createInvoice = catchAsync(async (req, res, next) => {
 
     await invoice.save({ session });
 
-    // Create or update sales orders for each item
+    // ─────────────────────────────────────
+    // Create / Update Sales Orders
+    // ✅ مع invoiceSales من الأول
+    // ─────────────────────────────────────
     for (const item of processedItems) {
-      // Check if sales order exists for this product
       let salesOrder = await SalesOrder.findOne({
         product: item.product,
       }).session(session);
 
       if (salesOrder) {
-        // Update existing sales order
         salesOrder.count += item.quantity;
         salesOrder.subtotal += item.lineTotal;
+        salesOrder.lastUpdateDate = new Date();
+
+        // ✅ إضافة invoiceSales entry
+        if (!Array.isArray(salesOrder.invoiceSales)) {
+          salesOrder.invoiceSales = [];
+        }
+        salesOrder.invoiceSales.push({
+          invoice: invoice._id,
+          quantity: item.quantity,
+          subtotal: item.lineTotal,
+        });
+
         await salesOrder.save({ session });
       } else {
-        // Generate new order number
         let orderNumber;
         try {
           orderNumber = await getNextSequence('salesOrder', session);
@@ -219,28 +345,29 @@ exports.createInvoice = catchAsync(async (req, res, next) => {
           throw new AppError('Failed to generate sales order number.', 500);
         }
 
-        // Create new sales order
         salesOrder = new SalesOrder({
           orderNumber,
           customer: customer._id,
           product: item.product,
           count: item.quantity,
           subtotal: item.lineTotal,
+          // ✅ invoiceSales من الأول
+          invoiceSales: [
+            {
+              invoice: invoice._id,
+              quantity: item.quantity,
+              subtotal: item.lineTotal,
+            },
+          ],
+          lastUpdateDate: new Date(),
         });
         await salesOrder.save({ session });
       }
-
-      // // Link the sales order to the invoice
-      // await Invoice.findByIdAndUpdate(
-      //     invoice._id,
-      //     {
-      //         $addToSet: { salesOrders: salesOrder._id }
-      //     },
-      //     { session }
-      // );
     }
 
-    // Create payment if amount > 0
+    // ─────────────────────────────────────
+    // Create Payment
+    // ─────────────────────────────────────
     let payment = null;
     if (amount > 0) {
       payment = new Payment({
@@ -248,64 +375,33 @@ exports.createInvoice = catchAsync(async (req, res, next) => {
         customerName: name,
         amount,
         invoice: invoice._id,
+        status: 'Success',
+        method: 'Cash',
       });
       await payment.save({ session });
     }
 
-    // Create transactions
-    const transactions = [
-      {
-        type: 'invoice',
-        referenceId: invoice._id,
-        amount: subtotal,
-        details: `Invoice #${invoice.formattedInvoiceNumber} created with total ${subtotal} for customer ${customer.name}`,
-        items: processedItems.map((item) => ({
-          product: item.product,
-          quantity: item.quantity,
-          price: item.unitPrice,
-        })),
-        status: 'debit',
-      },
-    ];
+    // ─────────────────────────────────────
+    // Create Transactions
+    // ─────────────────────────────────────
+    const transactionsData = buildTransactions(
+      invoice,
+      subtotal,
+      discountAmount,
+      discount,
+      amount
+    );
 
-    if (discountAmount > 0) {
-      transactions.push({
-        type: 'discount',
-        referenceId: invoice._id,
-        amount: discountAmount,
-        details: `Discount of ${discount}% applied to invoice #${invoice.formattedInvoiceNumber}`,
-        items: [],
-        status: 'credit',
-      });
-    }
-
-    if (amount > 0) {
-      transactions.push({
-        type: 'payment',
-        referenceId: invoice._id,
-        amount,
-        details: `Payment of ${amount} received for invoice #${invoice.formattedInvoiceNumber}`,
-        items: [],
-        status: 'credit',
-      });
-    }
-
-    const createdTransactions = await Transaction.insertMany(transactions, {
+    const createdTransactions = await Transaction.insertMany(transactionsData, {
       session,
     });
 
-    // Update customer
-    if (!customer.transactions) customer.transactions = [];
-    if (!customer.invoice) customer.invoice = [];
-    if (!customer.payment) customer.payment = [];
-
+    // ─────────────────────────────────────
+    // Update Customer
+    // ─────────────────────────────────────
     customer.transactions.push(...createdTransactions.map((t) => t._id));
     customer.invoice.push(invoice._id);
     if (payment) customer.payment.push(payment._id);
-
-    if (!customer.outstandingBalance) customer.outstandingBalance = 0;
-    if (!customer.balance) customer.balance = 0;
-
     customer.outstandingBalance += remaining;
     customer.balance += remaining;
 
@@ -326,27 +422,41 @@ exports.createInvoice = catchAsync(async (req, res, next) => {
     });
   } catch (error) {
     await session.abortTransaction();
-    if (error instanceof AppError) {
-      next(error);
-    } else {
-      console.error('Invoice creation error:', error);
-      next(new AppError('Something went wrong during invoice creation', 500));
-    }
+    if (error instanceof AppError) return next(error);
+    console.error('Invoice creation error:', error);
+    next(new AppError('Something went wrong during invoice creation', 500));
   } finally {
     session.endSession();
   }
 });
 
-// Update invoice with all related updates
+// ============================================================
+// Update Invoice
+// ============================================================
 exports.updateInvoice = catchAsync(async (req, res, next) => {
+  // ✅ 1 - Validate قبل فتح Session
+  const { error } = invoiceSchema.validate(req.body, { abortEarly: false });
+  if (error) {
+    const messages = error.details.map((d) => d.message).join(', ');
+    return next(new AppError(messages, 400));
+  }
+
+  const { name, email, phone, items, amount, discount } = req.body;
+
+  if (amount < 0) {
+    return next(new AppError('Payment amount cannot be negative', 400));
+  }
+
+  // ✅ 2 - افتح الـ Session بعد الـ Validation
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
     const invoiceId = req.params.id;
-    const { name, email, phone, items, amount, discount } = req.body;
 
-    // Get original invoice
+    // ─────────────────────────────────────
+    // Get Original Invoice
+    // ─────────────────────────────────────
     const originalInvoice = await Invoice.findById(invoiceId)
       .populate('customer')
       .populate('items.product')
@@ -356,49 +466,54 @@ exports.updateInvoice = catchAsync(async (req, res, next) => {
       throw new AppError('Invoice not found', 404);
     }
 
-    // Validation
-    const { error } = invoiceSchema.validate(req.body, { abortEarly: false });
-    if (error) {
-      const messages = error.details.map((detail) => detail.message).join(', ');
-      throw new AppError(messages, 400);
-    }
-
-    if (amount < 0) {
-      throw new AppError('Payment amount cannot be negative', 400);
-    }
-
-    // Revert original stock changes
-    const originalStockReverts = [];
-    for (const item of originalInvoice.items) {
-      originalStockReverts.push({
-        updateOne: {
-          filter: { product: item.product._id },
-          update: {
-            $inc: { quantity: item.quantity }, // Add back the quantity
-            $set: { lastStockUpdate: new Date() },
-          },
+    // ─────────────────────────────────────
+    // Revert Original Stock
+    // ─────────────────────────────────────
+    const originalStockReverts = originalInvoice.items.map((item) => ({
+      updateOne: {
+        filter: { product: item.product._id },
+        update: {
+          $inc: { quantity: item.quantity },
+          $set: { lastStockUpdate: new Date() },
         },
-      });
-    }
+      },
+    }));
 
     if (originalStockReverts.length > 0) {
       await Stock.bulkWrite(originalStockReverts, { session });
     }
 
-    // Handle customer updates
+    // ─────────────────────────────────────
+    // Handle Customer
+    // ✅ مع تحديث الـ Customer القديم لو اتغير
+    // ─────────────────────────────────────
     let customer = originalInvoice.customer;
     let customerUpdated = false;
 
     if (name && customer.name !== name) {
-      // Check if customer with new name exists
       const existingCustomer = await Customer.findOne({ name }).session(
         session
       );
+
       if (
         existingCustomer &&
         existingCustomer._id.toString() !== customer._id.toString()
       ) {
+        // ✅ حدث الـ Customer القديم
+        const oldCustomer = customer;
+        oldCustomer.invoice = oldCustomer.invoice.filter(
+          (inv) => inv.toString() !== invoiceId
+        );
+        oldCustomer.outstandingBalance =
+          (oldCustomer.outstandingBalance || 0) - originalInvoice.balanceDue;
+        oldCustomer.balance =
+          (oldCustomer.balance || 0) - originalInvoice.balanceDue;
+        await oldCustomer.save({ session });
+
+        // ✅ انتقل للـ Customer الجديد
         customer = existingCustomer;
+        if (!customer.invoice) customer.invoice = [];
+        customer.invoice.push(invoiceId);
       } else {
         customer.name = name;
         customerUpdated = true;
@@ -419,99 +534,42 @@ exports.updateInvoice = catchAsync(async (req, res, next) => {
       await customer.save({ session });
     }
 
-    // Process new items
-    const processedItems = [];
-    const stockUpdates = [];
-    let subtotal = 0;
-
-    const productNames = items.map((item) => item.product);
-    const products = await Product.find({
-      name: { $in: productNames },
-    }).session(session);
-
-    if (products.length !== productNames.length) {
-      const foundNames = products.map((p) => p.name);
-      const missing = productNames.filter((name) => !foundNames.includes(name));
-      throw new AppError(`Products not found: ${missing.join(', ')}`, 404);
-    }
-
-    const productMap = new Map(products.map((p) => [p.name, p]));
-    const productIds = products.map((p) => p._id);
-    const stocks = await Stock.find({ product: { $in: productIds } })
-      .populate('product')
-      .session(session);
-    const stockMap = new Map(stocks.map((s) => [s.product._id.toString(), s]));
-
-    for (const item of items) {
-      if (item.quantity <= 0 || !Number.isInteger(item.quantity)) {
-        throw new AppError(
-          `Invalid quantity for product: ${item.product}`,
-          400
-        );
-      }
-
-      const product = productMap.get(item.product);
-      const stock = stockMap.get(product._id.toString());
-
-      if (stock.quantity < item.quantity) {
-        throw new AppError(
-          `Insufficient stock for ${product.name}. Available: ${stock.quantity}`,
-          400
-        );
-      }
-
-      const lineTotal = product.sellingPrice * item.quantity;
-      subtotal += lineTotal;
-
-      processedItems.push({
-        product: product._id,
-        quantity: item.quantity,
-        unitPrice: product.sellingPrice,
-        taxRate: product.taxes || 0,
-        lineTotal,
-      });
-
-      stockUpdates.push({
-        updateOne: {
-          filter: { _id: stock._id },
-          update: {
-            $inc: { quantity: -item.quantity },
-            $set: { lastStockUpdate: new Date() },
-          },
-        },
-      });
-    }
+    // ─────────────────────────────────────
+    // Process New Items & Update Stock
+    // ─────────────────────────────────────
+    const { productMap, stockMap } = await getProductsAndStocks(items, session);
+    const { processedItems, stockUpdates, subtotal } = processInvoiceItems(
+      items,
+      productMap,
+      stockMap
+    );
 
     if (stockUpdates.length > 0) {
       await Stock.bulkWrite(stockUpdates, { session });
     }
 
-    // Calculate new totals
-    let discountAmount = 0;
-    if (discount) {
-      if (discount < 0 || discount > 100) {
-        throw new AppError('Discount must be between 0 and 100.', 400);
-      }
-      discountAmount = subtotal * (discount / 100);
-    }
+    // ─────────────────────────────────────
+    // Calculate New Totals
+    // ─────────────────────────────────────
+    const { discountAmount, totalAfterDiscount, remaining } = calculateTotals(
+      subtotal,
+      discount,
+      amount
+    );
 
-    const totalAfterDiscount = subtotal - discountAmount;
-    if (amount > totalAfterDiscount) {
-      throw new AppError(
-        `Payment amount (${amount}) exceeds total invoice amount (${totalAfterDiscount})`,
-        400
-      );
-    }
+    // ─────────────────────────────────────
+    // Update Customer Balance
+    // ─────────────────────────────────────
+    customer.outstandingBalance =
+      (customer.outstandingBalance || 0) -
+      originalInvoice.balanceDue +
+      remaining;
+    customer.balance =
+      (customer.balance || 0) - originalInvoice.balanceDue + remaining;
 
-    const remaining = totalAfterDiscount - amount;
-
-    // Update customer balance (remove old balance, add new)
-    customer.outstandingBalance -= originalInvoice.balanceDue;
-    customer.balance -= originalInvoice.balanceDue;
-    customer.outstandingBalance += remaining;
-    customer.balance += remaining;
-
-    // Update invoice
+    // ─────────────────────────────────────
+    // Update Invoice
+    // ─────────────────────────────────────
     originalInvoice.customer = customer._id;
     originalInvoice.items = processedItems;
     originalInvoice.subtotal = subtotal;
@@ -522,138 +580,129 @@ exports.updateInvoice = catchAsync(async (req, res, next) => {
 
     await originalInvoice.save({ session });
 
-    // Delete old transactions and payments
+    // ─────────────────────────────────────
+    // Delete Old Transactions & Payments
+    // ─────────────────────────────────────
     await Transaction.deleteMany({ referenceId: invoiceId }, { session });
     await Payment.deleteMany({ invoice: invoiceId }, { session });
 
-    // تحديث المبيعات
-    const updateSalesOrders = async () => {
-      // جلب كل سجلات المبيعات المتأثرة
-      const allProductIds = new Set([
-        ...originalInvoice.items.map((item) => item.product._id.toString()),
-        ...processedItems.map((item) => item.product.toString()),
-      ]);
+    // ─────────────────────────────────────
+    // Update Sales Orders
+    // ─────────────────────────────────────
+    const allProductIds = new Set([
+      ...originalInvoice.items.map((item) => item.product._id.toString()),
+      ...processedItems.map((item) => item.product.toString()),
+    ]);
 
-      const salesOrders = await SalesOrder.find({
-        product: { $in: Array.from(allProductIds) },
-      }).session(session);
+    const salesOrders = await SalesOrder.find({
+      product: { $in: Array.from(allProductIds) },
+    }).session(session);
 
-      const salesOrderMap = new Map(
-        salesOrders.map((so) => [so.product.toString(), so])
+    const salesOrderMap = new Map(
+      salesOrders.map((so) => [so.product.toString(), so])
+    );
+
+    for (const productId of allProductIds) {
+      let salesOrder = salesOrderMap.get(productId);
+
+      const newItem = processedItems.find(
+        (item) => item.product.toString() === productId
       );
 
-      // تحديث سجلات المبيعات
-      for (const productId of allProductIds) {
-        let salesOrder = salesOrderMap.get(productId);
-
-        // البحث عن الكميات القديمة والجديدة
-        const originalItem = originalInvoice.items.find(
-          (item) => item.product._id.toString() === productId
-        );
-        const newItem = processedItems.find(
-          (item) => item.product.toString() === productId
-        );
-
-        if (!salesOrder && newItem) {
-          // إنشاء سجل مبيعات جديد
-          const orderNumber = await getNextSequence('salesOrder', session);
-          salesOrder = new SalesOrder({
-            orderNumber,
-            customer: customer._id,
-            product: productId,
-            count: newItem.quantity,
-            subtotal: newItem.lineTotal,
-            invoiceSales: [
-              {
-                invoice: originalInvoice._id,
-                quantity: newItem.quantity,
-                subtotal: newItem.lineTotal,
-              },
-            ],
-            lastUpdateDate: new Date(),
-          });
-          await salesOrder.save({ session });
-          continue;
-        }
-
-        if (salesOrder) {
-          // حذف السجل القديم للفاتورة إن وجد
-          const invoiceSaleIndex = salesOrder.invoiceSales.findIndex(
-            (is) => is.invoice.toString() === originalInvoice._id.toString()
-          );
-
-          if (invoiceSaleIndex > -1) {
-            const oldInvoiceSale = salesOrder.invoiceSales[invoiceSaleIndex];
-            salesOrder.count -= oldInvoiceSale.quantity;
-            salesOrder.subtotal -= oldInvoiceSale.subtotal;
-            salesOrder.invoiceSales.splice(invoiceSaleIndex, 1);
-          }
-
-          // إضافة السجل الجديد للفاتورة إن وجد
-          if (newItem) {
-            salesOrder.count += newItem.quantity;
-            salesOrder.subtotal += newItem.lineTotal;
-            salesOrder.invoiceSales.push({
+      if (!salesOrder && newItem) {
+        // ✅ إنشاء سجل جديد
+        const orderNumber = await getNextSequence('salesOrder', session);
+        salesOrder = new SalesOrder({
+          orderNumber,
+          customer: customer._id,
+          product: productId,
+          count: newItem.quantity,
+          subtotal: newItem.lineTotal,
+          invoiceSales: [
+            {
               invoice: originalInvoice._id,
               quantity: newItem.quantity,
               subtotal: newItem.lineTotal,
-            });
-          }
+            },
+          ],
+          lastUpdateDate: new Date(),
+        });
+        await salesOrder.save({ session });
+        continue;
+      }
 
-          // تحديث أو حذف سجل المبيعات
-          if (salesOrder.count <= 0) {
-            await SalesOrder.deleteOne({ _id: salesOrder._id }).session(
-              session
-            );
-          } else {
-            salesOrder.lastUpdateDate = new Date();
-            await salesOrder.save({ session });
-          }
+      if (salesOrder) {
+        // ✅ التأكد من وجود invoiceSales كـ array
+        if (!Array.isArray(salesOrder.invoiceSales)) {
+          salesOrder.invoiceSales = [];
+        }
+
+        // حذف السجل القديم
+        const invoiceSaleIndex = salesOrder.invoiceSales.findIndex(
+          (is) => is.invoice.toString() === originalInvoice._id.toString()
+        );
+
+        if (invoiceSaleIndex > -1) {
+          const oldInvoiceSale = salesOrder.invoiceSales[invoiceSaleIndex];
+          salesOrder.count -= oldInvoiceSale.quantity;
+          salesOrder.subtotal -= oldInvoiceSale.subtotal;
+          salesOrder.invoiceSales.splice(invoiceSaleIndex, 1);
+        }
+
+        // إضافة السجل الجديد
+        if (newItem) {
+          salesOrder.count += newItem.quantity;
+          salesOrder.subtotal += newItem.lineTotal;
+          salesOrder.invoiceSales.push({
+            invoice: originalInvoice._id,
+            quantity: newItem.quantity,
+            subtotal: newItem.lineTotal,
+          });
+        }
+
+        // تحديث أو حذف
+        if (salesOrder.count <= 0) {
+          await SalesOrder.deleteOne({ _id: salesOrder._id }).session(session);
+        } else {
+          salesOrder.lastUpdateDate = new Date();
+          await salesOrder.save({ session });
         }
       }
-    };
-
-    await updateSalesOrders();
-
-    // Create new transactions
-    const transactions = [
-      {
-        type: 'invoice',
-        referenceId: originalInvoice._id,
-        amount: subtotal,
-        details: `Invoice #${originalInvoice.formattedInvoiceNumber} updated with total ${subtotal} for customer ${customer.name}`,
-        items: processedItems.map((item) => ({
-          product: item.product,
-          quantity: item.quantity,
-          price: item.unitPrice,
-        })),
-        status: 'debit',
-      },
-    ];
-
-    if (discountAmount > 0) {
-      transactions.push({
-        type: 'discount',
-        referenceId: originalInvoice._id,
-        amount: discountAmount,
-        details: `Discount of ${discount}% applied to invoice #${originalInvoice.formattedInvoiceNumber}`,
-        items: [],
-        status: 'credit',
-      });
     }
+
+    // ─────────────────────────────────────
+    // Create New Transactions
+    // ─────────────────────────────────────
+    const transactionsData = buildTransactions(
+      originalInvoice,
+      subtotal,
+      discountAmount,
+      discount,
+      amount
+    );
+
+    const createdTransactions = await Transaction.insertMany(transactionsData, {
+      session,
+    });
+
+    // ─────────────────────────────────────
+    // Create New Payment & Update Customer
+    // ─────────────────────────────────────
+    customer.transactions.push(...createdTransactions.map((t) => t._id));
 
     if (amount > 0) {
-      transactions.push({
-        type: 'payment',
-        referenceId: originalInvoice._id,
+      const newPayment = new Payment({
+        customer: customer._id,
+        customerName: customer.name,
         amount,
-        details: `Payment of ${amount} received for invoice #${originalInvoice.formattedInvoiceNumber}`,
-        items: [],
-        status: 'credit',
+        invoice: originalInvoice._id,
+        status: 'Success',
+        method: 'Cash',
       });
+      await newPayment.save({ session });
+      customer.payment.push(newPayment._id);
     }
 
-    await Transaction.insertMany(transactions, { session });
     await customer.save({ session });
     await session.commitTransaction();
 
@@ -671,18 +720,17 @@ exports.updateInvoice = catchAsync(async (req, res, next) => {
     });
   } catch (error) {
     await session.abortTransaction();
-    if (error instanceof AppError) {
-      next(error);
-    } else {
-      console.error('Invoice update error:', error);
-      next(new AppError('Something went wrong during invoice update', 500));
-    }
+    if (error instanceof AppError) return next(error);
+    console.error('Invoice update error:', error);
+    next(new AppError('Something went wrong during invoice update', 500));
   } finally {
     session.endSession();
   }
 });
 
-
+// ============================================================
+// Delete Invoice
+// ============================================================
 exports.deleteInvoice = catchAsync(async (req, res, next) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -696,20 +744,58 @@ exports.deleteInvoice = catchAsync(async (req, res, next) => {
       .populate('items.product')
       .session(session);
 
+    // ✅ abort قبل next
     if (!invoice) {
-      // ...
+      await session.abortTransaction();
+      session.endSession();
       return next(new AppError('Invoice not found', 404));
     }
     console.log('[2] Invoice found successfully.');
 
-    // ... (منطق تحديث العميل يبقى كما هو)
+    // ─────────────────────────────────────
+    // Update Customer
+    // ✅ مع تحديث الـ balance والـ references
+    // ─────────────────────────────────────
     if (invoice.customer) {
-      // ...
-      await invoice.customer.save({ session });
-      console.log('[4] Customer updated successfully.');
-    } //...
+      const customer = invoice.customer;
 
-    // ... (منطق إعادة المخزون يبقى كما هو)
+      // ✅ إرجاع الـ balance
+      customer.outstandingBalance =
+        (customer.outstandingBalance || 0) - invoice.balanceDue;
+      customer.balance = (customer.balance || 0) - invoice.balanceDue;
+
+      // ✅ إزالة الفاتورة من سجل العميل
+      customer.invoice = (customer.invoice || []).filter(
+        (inv) => inv.toString() !== invoice._id.toString()
+      );
+
+      // ✅ إزالة الـ Payments المرتبطة
+      const relatedPayments = await Payment.find({
+        invoice: invoiceId,
+      }).session(session);
+
+      const paymentIds = relatedPayments.map((p) => p._id.toString());
+      customer.payment = (customer.payment || []).filter(
+        (p) => !paymentIds.includes(p.toString())
+      );
+
+      // ✅ إزالة الـ Transactions المرتبطة
+      const relatedTransactions = await Transaction.find({
+        referenceId: invoiceId,
+      }).session(session);
+
+      const transactionIds = relatedTransactions.map((t) => t._id.toString());
+      customer.transactions = (customer.transactions || []).filter(
+        (t) => !transactionIds.includes(t.toString())
+      );
+
+      await customer.save({ session });
+      console.log('[4] Customer updated successfully.');
+    }
+
+    // ─────────────────────────────────────
+    // Revert Stock
+    // ─────────────────────────────────────
     const stockReverts = [];
     for (const item of invoice.items) {
       if (item.product && item.product._id) {
@@ -724,20 +810,23 @@ exports.deleteInvoice = catchAsync(async (req, res, next) => {
         });
       }
     }
+
     if (stockReverts.length > 0) {
       await Stock.bulkWrite(stockReverts, { session });
       console.log('[6] Stock reverted successfully.');
     }
 
+    // ─────────────────────────────────────
+    // Update Sales Orders
+    // ─────────────────────────────────────
     console.log('[7] Starting SalesOrder updates...');
+
     for (const item of invoice.items) {
       if (item.product && item.product._id) {
         const salesOrder = await SalesOrder.findOne({
           product: item.product._id,
         }).session(session);
 
-        // ================== بداية الإصلاح ==================
-        // التحقق من وجود أمر البيع وأن حقل invoiceSales هو مصفوفة
         if (salesOrder && Array.isArray(salesOrder.invoiceSales)) {
           const invoiceSaleIndex = salesOrder.invoiceSales.findIndex(
             (is) => is.invoice.toString() === invoice._id.toString()
@@ -759,18 +848,20 @@ exports.deleteInvoice = catchAsync(async (req, res, next) => {
             }
           }
         }
-        // ================== نهاية الإصلاح ==================
       }
     }
     console.log('[8] SalesOrder updates finished.');
 
+    // ─────────────────────────────────────
+    // Delete Payments & Transactions & Invoice
+    // ─────────────────────────────────────
     console.log('[9] Deleting related Payments and Transactions...');
     await Payment.deleteMany({ invoice: invoiceId }, { session });
     await Transaction.deleteMany({ referenceId: invoiceId }, { session });
     console.log('[10] Related documents deleted.');
 
     await Invoice.findByIdAndDelete(invoiceId, { session });
-    console.log('[11] Invoice document deleted. Committing transaction.');
+    console.log('[11] Invoice deleted. Committing transaction.');
 
     await session.commitTransaction();
 
@@ -780,7 +871,7 @@ exports.deleteInvoice = catchAsync(async (req, res, next) => {
     });
   } catch (error) {
     await session.abortTransaction();
-    console.error('TRANSACTION FAILED. Error details:', error);
+    console.error('TRANSACTION FAILED:', error);
     next(
       new AppError(
         'Something went wrong during invoice deletion. The operation was rolled back.',
@@ -792,63 +883,100 @@ exports.deleteInvoice = catchAsync(async (req, res, next) => {
   }
 });
 
-// Additional helper function for invoice status updates
+// ============================================================
+// Update Invoice Status
+// ============================================================
 exports.updateInvoiceStatus = catchAsync(async (req, res, next) => {
+  // ✅ Validate Status قبل فتح Session
+  const VALID_STATUSES = [
+    'draft',
+    'issued',
+    'paid',
+    'partially_paid',
+    'overdue',
+    'cancelled',
+    'refunded',
+  ];
+
+  const { status, paymentAmount } = req.body;
+
+  if (!status) {
+    return next(new AppError('Status is required', 400));
+  }
+
+  if (!VALID_STATUSES.includes(status)) {
+    return next(
+      new AppError(
+        `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`,
+        400
+      )
+    );
+  }
+
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
     const { id } = req.params;
-    const { status, paymentAmount } = req.body;
 
     const invoice = await Invoice.findById(id)
       .populate('customer')
       .session(session);
+
     if (!invoice) {
       throw new AppError('Invoice not found', 404);
     }
 
     if (status === 'paid' && paymentAmount) {
+      if (paymentAmount <= 0) {
+        throw new AppError('Payment amount must be positive', 400);
+      }
+
       if (paymentAmount > invoice.balanceDue) {
         throw new AppError('Payment amount exceeds balance due', 400);
       }
 
-      // Update invoice
+      // ✅ تحديث الفاتورة
       invoice.amountPaid += paymentAmount;
       invoice.balanceDue -= paymentAmount;
+      // الـ pre save هيتكلف بتحديث الـ status تلقائياً
 
-      if (invoice.balanceDue === 0) {
-        invoice.status = 'paid';
-      }
-
-      // Create payment record
+      // ✅ إنشاء Payment
       const payment = new Payment({
         customer: invoice.customer._id,
         customerName: invoice.customer.name,
         amount: paymentAmount,
         invoice: invoice._id,
+        status: 'Success',
+        method: 'Cash',
       });
       await payment.save({ session });
 
-      // Create transaction
+      // ✅ إنشاء Transaction
       const transaction = new Transaction({
         type: 'payment',
         referenceId: invoice._id,
         amount: paymentAmount,
-        details: `Additional payment of ${paymentAmount} for invoice #${invoice.formattedInvoiceNumber}`,
+        details: `Payment of ${paymentAmount} for invoice #${invoice.formattedInvoiceNumber}`,
         items: [],
         status: 'credit',
       });
       await transaction.save({ session });
 
-      // Update customer
+      // ✅ تحديث العميل
       const customer = invoice.customer;
-      customer.outstandingBalance -= paymentAmount;
-      customer.balance -= paymentAmount;
+      customer.outstandingBalance =
+        (customer.outstandingBalance || 0) - paymentAmount;
+      customer.balance = (customer.balance || 0) - paymentAmount;
+
+      if (!customer.payment) customer.payment = [];
+      if (!customer.transactions) customer.transactions = [];
+
       customer.payment.push(payment._id);
       customer.transactions.push(transaction._id);
       await customer.save({ session });
     } else {
+      // ✅ تغيير الـ status مباشرة
       invoice.status = status;
     }
 
@@ -862,12 +990,9 @@ exports.updateInvoiceStatus = catchAsync(async (req, res, next) => {
     });
   } catch (error) {
     await session.abortTransaction();
-    if (error instanceof AppError) {
-      next(error);
-    } else {
-      console.error('Invoice status update error:', error);
-      next(new AppError('Something went wrong during status update', 500));
-    }
+    if (error instanceof AppError) return next(error);
+    console.error('Invoice status update error:', error);
+    next(new AppError('Something went wrong during status update', 500));
   } finally {
     session.endSession();
   }

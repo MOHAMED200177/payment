@@ -1,25 +1,21 @@
 const mongoose = require('mongoose');
 
-const paymentSchema = new mongoose.Schema(
+const supplierPaymentSchema = new mongoose.Schema(
   {
-    customer: {
+    purchaseOrder: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Customer',
+      ref: 'PurchaseOrder',
       required: true,
     },
-    customerName: {
-      type: String,
-      required: true,
-    },
-    invoice: {
+    supplier: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Invoice',
-      default: null,
+      ref: 'Supplier',
+      required: true,
     },
     amount: {
       type: Number,
       required: true,
-      min: [0, 'Amount must be a positive number'],
+      min: [0, 'Amount cannot be negative'],
     },
     method: {
       type: String,
@@ -35,6 +31,10 @@ const paymentSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    notes: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -42,8 +42,8 @@ const paymentSchema = new mongoose.Schema(
 );
 
 // ✅ Indexes
-paymentSchema.index({ customer: 1 });
-paymentSchema.index({ invoice: 1 });
-paymentSchema.index({ date: -1 });
+supplierPaymentSchema.index({ purchaseOrder: 1 });
+supplierPaymentSchema.index({ supplier: 1 });
+supplierPaymentSchema.index({ date: -1 });
 
-module.exports = mongoose.model('Payment', paymentSchema);
+module.exports = mongoose.model('SupplierPayment', supplierPaymentSchema);

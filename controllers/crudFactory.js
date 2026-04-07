@@ -105,6 +105,9 @@ exports.getAll = (
     let filter = {};
     if (req.params.petId) filter = { pet: req.params.petId };
 
+    const countQuery = new APIFeatures(Model.find(filter), req.query).filter();
+    const total = await Model.countDocuments(countQuery.query.getFilter());
+
     const features = new APIFeatures(Model.find(filter), req.query)
       .filter()
       .sort()
@@ -115,11 +118,17 @@ exports.getAll = (
 
     const doc = await features.query;
 
-    // SEND RESPONSE
+    const page = req.query.page * 1 || 1;
+    const limit = req.query.limit * 1 || 20;
+    const pages = Math.max(1, Math.ceil(total / limit));
+
     res.status(200).json({
       status: 'success',
       results: doc.length,
-      paginate: Math.ceil(doc.length / (req.query.limit || 10)), // تحسين لحساب الصفحات
+      total,
+      page,
+      limit,
+      paginate: pages,
       data: {
         data: doc,
       },

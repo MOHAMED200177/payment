@@ -6,38 +6,68 @@ const Customer = require('../models/customer');
 const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
 
-// تقرير مالي شامل
-exports.comprehensiveFinancialReport = catchAsync(async (req, res, next) => {
-  const { year, month, startDate, endDate } = req.body;
-
-  let dateFilter = {};
-
+// ============================================================
+// Helper - Build Date Filter
+// ============================================================
+const buildDateFilter = (startDate, endDate, year, month) => {
+  // ✅ لو فيه startDate و endDate
   if (startDate && endDate) {
-    dateFilter = {
-      createdAt: {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate),
-      },
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      throw new AppError('Invalid date format', 400);
+    }
+
+    if (start > end) {
+      throw new AppError('startDate must be before endDate', 400);
+    }
+
+    return {
+      createdAt: { $gte: start, $lte: end },
     };
-  } else if (year && month) {
+  }
+
+  // ✅ لو فيه year و month
+  if (year && month) {
     const startOfMonth = new Date(year, month - 1, 1);
-    const endOfMonth = new Date(year, month, 0);
-    dateFilter = {
-      createdAt: {
-        $gte: startOfMonth,
-        $lte: endOfMonth,
-      },
+    const endOfMonth = new Date(year, month, 0, 23, 59, 59);
+    return {
+      createdAt: { $gte: startOfMonth, $lte: endOfMonth },
     };
-  } else if (year) {
-    dateFilter = {
+  }
+
+  // ✅ لو فيه year بس
+  if (year) {
+    return {
       createdAt: {
         $gte: new Date(`${year}-01-01`),
-        $lte: new Date(`${year}-12-31`),
+        $lte: new Date(`${year}-12-31T23:59:59`),
       },
     };
   }
 
-  // إحصائيات المبيعات
+  // ✅ لو مفيش filters - رجع empty object
+  return {};
+};
+
+// ============================================================
+// Comprehensive Financial Report
+// ============================================================
+exports.comprehensiveFinancialReport = catchAsync(async (req, res, next) => {
+  const { year, month, startDate, endDate } = req.body;
+
+  // ✅ Build date filter مرة واحدة
+  let dateFilter;
+  try {
+    dateFilter = buildDateFilter(startDate, endDate, year, month);
+  } catch (error) {
+    return next(error);
+  }
+
+  // ─────────────────────────────────────
+  // Sales Statistics
+  // ─────────────────────────────────────
   const salesStats = await Invoice.aggregate([
     { $match: dateFilter },
     {
@@ -55,9 +85,17 @@ exports.comprehensiveFinancialReport = catchAsync(async (req, res, next) => {
     },
   ]);
 
-  // إحصائيات المرتجعات
+  // ─────────────────────────────────────
+  // Return Statistics
+  // ✅ بنستخدم createdAt مش date
+  // ✅ ونبني الـ match صح
+  // ─────────────────────────────────────
+  const returnMatchFilter = dateFilter.createdAt
+    ? { createdAt: dateFilter.createdAt, isDeleted: false }
+    : { isDeleted: false };
+
   const returnStats = await Return.aggregate([
-    { $match: { date: dateFilter.createdAt } },
+    { $match: returnMatchFilter },
     {
       $group: {
         _id: null,
@@ -68,12 +106,16 @@ exports.comprehensiveFinancialReport = catchAsync(async (req, res, next) => {
     },
   ]);
 
-  // صافي المبيعات
-  const netSales =
-    (salesStats[0]?.totalRevenue || 0) -
-    (returnStats[0]?.totalRefundAmount || 0);
+  // ─────────────────────────────────────
+  // Net Sales
+  // ─────────────────────────────────────
+  const totalRevenue = salesStats[0]?.totalRevenue || 0;
+  const totalRefunds = returnStats[0]?.totalRefundAmount || 0;
+  const netSales = totalRevenue - totalRefunds;
 
-  // التقرير الشهري
+  // ─────────────────────────────────────
+  // Monthly Breakdown
+  // ─────────────────────────────────────
   const monthlyBreakdown = await Invoice.aggregate([
     { $match: dateFilter },
     {
@@ -86,36 +128,61 @@ exports.comprehensiveFinancialReport = catchAsync(async (req, res, next) => {
         invoiceCount: { $sum: 1 },
         discounts: { $sum: '$discountAmount' },
         tax: { $sum: '$taxAmount' },
+        payments: { $sum: '$amountPaid' },
+        outstanding: { $sum: '$balanceDue' },
       },
     },
     { $sort: { '_id.year': 1, '_id.month': 1 } },
   ]);
 
-  // المرتجعات الشهرية
+  // ─────────────────────────────────────
+  // Monthly Returns
+  // ✅ بنستخدم createdAt
+  // ─────────────────────────────────────
   const monthlyReturns = await Return.aggregate([
-    { $match: { date: dateFilter.createdAt } },
+    { $match: returnMatchFilter },
     {
       $group: {
         _id: {
-          year: { $year: '$date' },
-          month: { $month: '$date' },
+          year: { $year: '$createdAt' },
+          month: { $month: '$createdAt' },
         },
         refunds: { $sum: '$refundAmount' },
         returnCount: { $sum: 1 },
+        returnedItems: { $sum: '$quantity' },
       },
     },
+    { $sort: { '_id.year': 1, '_id.month': 1 } },
   ]);
+
+  // ─────────────────────────────────────
+  // Profit Margin
+  // ✅ مع حماية من division by zero
+  // ─────────────────────────────────────
+  const profitMargin =
+    totalRevenue > 0
+      ? ((netSales / totalRevenue) * 100).toFixed(2) + '%'
+      : '0%';
 
   res.status(200).json({
     status: 'success',
     data: {
       summary: {
-        ...salesStats[0],
-        ...returnStats[0],
-        netSales,
-        profitMargin: salesStats[0]
-          ? ((netSales / salesStats[0].totalRevenue) * 100).toFixed(2) + '%'
-          : '0%',
+        totalInvoices: salesStats[0]?.totalInvoices || 0,
+        totalRevenue: totalRevenue.toFixed(2),
+        totalWithTax: (salesStats[0]?.totalWithTax || 0).toFixed(2),
+        totalPayments: (salesStats[0]?.totalPayments || 0).toFixed(2),
+        totalOutstanding: (salesStats[0]?.totalOutstanding || 0).toFixed(2),
+        totalDiscounts: (salesStats[0]?.totalDiscounts || 0).toFixed(2),
+        totalTax: (salesStats[0]?.totalTax || 0).toFixed(2),
+        averageInvoiceValue: (salesStats[0]?.averageInvoiceValue || 0).toFixed(
+          2
+        ),
+        totalReturns: returnStats[0]?.totalReturns || 0,
+        totalRefundAmount: totalRefunds.toFixed(2),
+        totalReturnedItems: returnStats[0]?.totalReturnedItems || 0,
+        netSales: netSales.toFixed(2),
+        profitMargin,
       },
       monthlyBreakdown,
       monthlyReturns,
@@ -123,19 +190,36 @@ exports.comprehensiveFinancialReport = catchAsync(async (req, res, next) => {
   });
 });
 
-// تقرير المنتجات الأكثر مبيعاً مع تحليل متقدم
+// ============================================================
+// Top Products Report
+// ============================================================
 exports.getTopProducts = catchAsync(async (req, res, next) => {
   const { startDate, endDate, limit = 10, sortBy = 'quantity' } = req.body;
 
+  // ✅ Validate dates
+  if (!startDate || !endDate) {
+    return next(new AppError('startDate and endDate are required', 400));
+  }
+
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    return next(new AppError('Invalid date format', 400));
+  }
+
+  if (start > end) {
+    return next(new AppError('startDate must be before endDate', 400));
+  }
+
   const dateFilter = {
-    issueDate: {
-      $gte: new Date(startDate),
-      $lte: new Date(endDate),
-    },
+    issueDate: { $gte: start, $lte: end },
   };
 
-  // المنتجات الأكثر مبيعاً
-  const topProductsPipeline = [
+  // ✅ Validate limit
+  const limitNum = Math.min(Math.max(Number(limit) || 10, 1), 100);
+
+  const topProducts = await Invoice.aggregate([
     { $match: dateFilter },
     { $unwind: '$items' },
     {
@@ -147,6 +231,7 @@ exports.getTopProducts = catchAsync(async (req, res, next) => {
         orderCount: { $sum: 1 },
       },
     },
+    // ✅ Lookup Product
     {
       $lookup: {
         from: 'products',
@@ -156,15 +241,27 @@ exports.getTopProducts = catchAsync(async (req, res, next) => {
       },
     },
     { $unwind: '$productInfo' },
+    // ✅ Lookup Category
+    {
+      $lookup: {
+        from: 'categories',
+        localField: 'productInfo.category',
+        foreignField: '_id',
+        as: 'categoryInfo',
+      },
+    },
+    // ✅ Lookup Returns - بـ ObjectId مش String
     {
       $lookup: {
         from: 'returns',
-        let: { productName: '$productInfo.name' },
+        let: { productId: '$_id' },
         pipeline: [
           {
             $match: {
-              $expr: { $eq: ['$product', '$$productName'] },
-              date: dateFilter.issueDate,
+              $expr: { $eq: ['$product', '$$productId'] }, // ✅ ObjectId
+              createdAt: { $gte: start, $lte: end }, // ✅ createdAt
+              isDeleted: false,
+              status: { $ne: 'cancelled' },
             },
           },
           {
@@ -183,16 +280,26 @@ exports.getTopProducts = catchAsync(async (req, res, next) => {
         _id: 0,
         productId: '$_id',
         productName: '$productInfo.name',
-        category: '$productInfo.category',
+        productCode: '$productInfo.productCode',
+        // ✅ Category Name مش ObjectId
+        category: {
+          $ifNull: [
+            { $arrayElemAt: ['$categoryInfo.name', 0] },
+            'Uncategorized',
+          ],
+        },
         totalQuantitySold: 1,
-        totalRevenue: 1,
+        totalRevenue: { $round: ['$totalRevenue', 2] },
         averagePrice: { $round: ['$averagePrice', 2] },
         orderCount: 1,
         returnedQuantity: {
           $ifNull: [{ $arrayElemAt: ['$returnInfo.totalReturns', 0] }, 0],
         },
         refundAmount: {
-          $ifNull: [{ $arrayElemAt: ['$returnInfo.refundAmount', 0] }, 0],
+          $round: [
+            { $ifNull: [{ $arrayElemAt: ['$returnInfo.refundAmount', 0] }, 0] },
+            2,
+          ],
         },
         netQuantitySold: {
           $subtract: [
@@ -201,25 +308,46 @@ exports.getTopProducts = catchAsync(async (req, res, next) => {
           ],
         },
         netRevenue: {
-          $subtract: [
-            '$totalRevenue',
-            { $ifNull: [{ $arrayElemAt: ['$returnInfo.refundAmount', 0] }, 0] },
-          ],
-        },
-        returnRate: {
-          $multiply: [
+          $round: [
             {
-              $divide: [
+              $subtract: [
+                '$totalRevenue',
                 {
                   $ifNull: [
-                    { $arrayElemAt: ['$returnInfo.totalReturns', 0] },
+                    { $arrayElemAt: ['$returnInfo.refundAmount', 0] },
                     0,
                   ],
                 },
-                '$totalQuantitySold',
               ],
             },
-            100,
+            2,
+          ],
+        },
+        returnRate: {
+          $round: [
+            {
+              $multiply: [
+                {
+                  $cond: [
+                    { $eq: ['$totalQuantitySold', 0] },
+                    0,
+                    {
+                      $divide: [
+                        {
+                          $ifNull: [
+                            { $arrayElemAt: ['$returnInfo.totalReturns', 0] },
+                            0,
+                          ],
+                        },
+                        '$totalQuantitySold',
+                      ],
+                    },
+                  ],
+                },
+                100,
+              ],
+            },
+            2,
           ],
         },
       },
@@ -228,10 +356,8 @@ exports.getTopProducts = catchAsync(async (req, res, next) => {
       $sort:
         sortBy === 'revenue' ? { netRevenue: -1 } : { netQuantitySold: -1 },
     },
-    { $limit: Number(limit) },
-  ];
-
-  const topProducts = await Invoice.aggregate(topProductsPipeline);
+    { $limit: limitNum },
+  ]);
 
   res.status(200).json({
     status: 'success',
@@ -239,7 +365,9 @@ exports.getTopProducts = catchAsync(async (req, res, next) => {
       products: topProducts,
       summary: {
         totalProducts: topProducts.length,
-        totalRevenue: topProducts.reduce((sum, p) => sum + p.netRevenue, 0),
+        totalRevenue: topProducts
+          .reduce((sum, p) => sum + p.netRevenue, 0)
+          .toFixed(2),
         totalQuantity: topProducts.reduce(
           (sum, p) => sum + p.netQuantitySold,
           0
@@ -249,15 +377,33 @@ exports.getTopProducts = catchAsync(async (req, res, next) => {
   });
 });
 
-// تحليل أداء العملاء
+// ============================================================
+// Customer Analysis
+// ============================================================
 exports.customerAnalysis = catchAsync(async (req, res, next) => {
   const { startDate, endDate, limit = 10 } = req.body;
 
+  // ✅ Validate dates
+  if (!startDate || !endDate) {
+    return next(new AppError('startDate and endDate are required', 400));
+  }
+
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    return next(new AppError('Invalid date format', 400));
+  }
+
+  if (start > end) {
+    return next(new AppError('startDate must be before endDate', 400));
+  }
+
+  // ✅ Validate limit
+  const limitNum = Math.min(Math.max(Number(limit) || 10, 1), 100);
+
   const dateFilter = {
-    createdAt: {
-      $gte: new Date(startDate),
-      $lte: new Date(endDate),
-    },
+    createdAt: { $gte: start, $lte: end },
   };
 
   const customerStats = await Invoice.aggregate([
@@ -273,6 +419,7 @@ exports.customerAnalysis = catchAsync(async (req, res, next) => {
         lastPurchaseDate: { $max: '$createdAt' },
       },
     },
+    // ✅ Lookup Customer
     {
       $lookup: {
         from: 'customers',
@@ -282,6 +429,7 @@ exports.customerAnalysis = catchAsync(async (req, res, next) => {
       },
     },
     { $unwind: '$customerInfo' },
+    // ✅ Lookup Returns - بـ createdAt مش date
     {
       $lookup: {
         from: 'returns',
@@ -290,7 +438,9 @@ exports.customerAnalysis = catchAsync(async (req, res, next) => {
           {
             $match: {
               $expr: { $eq: ['$customer', '$$customerId'] },
-              date: dateFilter.createdAt,
+              createdAt: { $gte: start, $lte: end }, // ✅ createdAt
+              isDeleted: false,
+              status: { $ne: 'cancelled' },
             },
           },
           {
@@ -310,6 +460,7 @@ exports.customerAnalysis = catchAsync(async (req, res, next) => {
         customerId: '$_id',
         customerName: '$customerInfo.name',
         email: '$customerInfo.email',
+        phone: '$customerInfo.phone',
         totalPurchases: { $round: ['$totalPurchases', 2] },
         invoiceCount: 1,
         totalPaid: { $round: ['$totalPaid', 2] },
@@ -320,7 +471,12 @@ exports.customerAnalysis = catchAsync(async (req, res, next) => {
           $ifNull: [{ $arrayElemAt: ['$returnInfo.totalReturns', 0] }, 0],
         },
         totalRefunds: {
-          $ifNull: [{ $arrayElemAt: ['$returnInfo.refundAmount', 0] }, 0],
+          $round: [
+            {
+              $ifNull: [{ $arrayElemAt: ['$returnInfo.refundAmount', 0] }, 0],
+            },
+            2,
+          ],
         },
         netPurchases: {
           $round: [
@@ -357,8 +513,19 @@ exports.customerAnalysis = catchAsync(async (req, res, next) => {
       },
     },
     { $sort: { netPurchases: -1 } },
-    { $limit: Number(limit) },
+    { $limit: limitNum },
   ]);
+
+  // ✅ حماية من division by zero
+  const totalRevenue = customerStats.reduce(
+    (sum, c) => sum + c.netPurchases,
+    0
+  );
+
+  const averageCustomerValue =
+    customerStats.length > 0
+      ? (totalRevenue / customerStats.length).toFixed(2)
+      : '0.00';
 
   res.status(200).json({
     status: 'success',
@@ -366,30 +533,43 @@ exports.customerAnalysis = catchAsync(async (req, res, next) => {
       customers: customerStats,
       summary: {
         totalCustomers: customerStats.length,
-        totalRevenue: customerStats.reduce((sum, c) => sum + c.netPurchases, 0),
-        averageCustomerValue: (
-          customerStats.reduce((sum, c) => sum + c.netPurchases, 0) /
-          customerStats.length
-        ).toFixed(2),
+        totalRevenue: totalRevenue.toFixed(2),
+        averageCustomerValue,
       },
     },
   });
 });
 
-// تحليل المبيعات حسب الفئات
+// ============================================================
+// Sales By Category
+// ============================================================
 exports.salesByCategory = catchAsync(async (req, res, next) => {
   const { startDate, endDate } = req.body;
+
+  // ✅ Validate dates
+  if (!startDate || !endDate) {
+    return next(new AppError('startDate and endDate are required', 400));
+  }
+
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    return next(new AppError('Invalid date format', 400));
+  }
+
+  if (start > end) {
+    return next(new AppError('startDate must be before endDate', 400));
+  }
 
   const categoryAnalysis = await Invoice.aggregate([
     {
       $match: {
-        createdAt: {
-          $gte: new Date(startDate),
-          $lte: new Date(endDate),
-        },
+        createdAt: { $gte: start, $lte: end },
       },
     },
     { $unwind: '$items' },
+    // ✅ Lookup Product
     {
       $lookup: {
         from: 'products',
@@ -399,9 +579,21 @@ exports.salesByCategory = catchAsync(async (req, res, next) => {
       },
     },
     { $unwind: '$productInfo' },
+    // ✅ Lookup Category - عشان نجيب الاسم
+    {
+      $lookup: {
+        from: 'categories',
+        localField: 'productInfo.category',
+        foreignField: '_id',
+        as: 'categoryInfo',
+      },
+    },
+    { $unwind: { path: '$categoryInfo', preserveNullAndEmptyArrays: true } },
     {
       $group: {
         _id: '$productInfo.category',
+        // ✅ نحتفظ باسم الـ category
+        categoryName: { $first: '$categoryInfo.name' },
         totalRevenue: { $sum: '$items.lineTotal' },
         totalQuantity: { $sum: '$items.quantity' },
         productCount: { $addToSet: '$items.product' },
@@ -411,7 +603,9 @@ exports.salesByCategory = catchAsync(async (req, res, next) => {
     {
       $project: {
         _id: 0,
-        category: '$_id',
+        categoryId: '$_id',
+        // ✅ name بدل ObjectId
+        categoryName: { $ifNull: ['$categoryName', 'Uncategorized'] },
         totalRevenue: { $round: ['$totalRevenue', 2] },
         totalQuantity: 1,
         uniqueProducts: { $size: '$productCount' },
@@ -424,20 +618,25 @@ exports.salesByCategory = catchAsync(async (req, res, next) => {
     { $sort: { totalRevenue: -1 } },
   ]);
 
+  // ✅ حماية من division by zero
   const totalRevenue = categoryAnalysis.reduce(
     (sum, cat) => sum + cat.totalRevenue,
     0
   );
 
-  // إضافة النسبة المئوية لكل فئة
-  categoryAnalysis.forEach((cat) => {
-    cat.percentage = ((cat.totalRevenue / totalRevenue) * 100).toFixed(2) + '%';
-  });
+  // ✅ إضافة النسبة المئوية
+  const categoriesWithPercentage = categoryAnalysis.map((cat) => ({
+    ...cat,
+    percentage:
+      totalRevenue > 0
+        ? ((cat.totalRevenue / totalRevenue) * 100).toFixed(2) + '%'
+        : '0%',
+  }));
 
   res.status(200).json({
     status: 'success',
     data: {
-      categories: categoryAnalysis,
+      categories: categoriesWithPercentage,
       summary: {
         totalCategories: categoryAnalysis.length,
         totalRevenue: totalRevenue.toFixed(2),

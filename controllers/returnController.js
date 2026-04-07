@@ -5,109 +5,149 @@ const Stock = require('../models/stock');
 const Product = require('../models/product');
 const Invoice = require('../models/invoice');
 const Transaction = require('../models/transactions');
-const Sale = require('../models/sales');
+const SalesOrder = require('../models/sales');
+const AppError = require('../utils/appError');
+const catchAsync = require('../utils/catchAsync');
 
-// Helper function to update sales statistics
+// ============================================================
+// Helper - Update Sales Statistics
+// ✅ متطابق مع الـ SalesOrder Model
+// ============================================================
 const updateSalesStatistics = async (
   productId,
+  invoiceId,
   quantity,
   amount,
   session,
   isReturn = true
 ) => {
-  const sale = await Sale.findOne({ product: productId }).session(session);
+  const salesOrder = await SalesOrder.findOne({
+    product: productId,
+  }).session(session);
 
-  if (!sale) {
-    throw new Error('Sale record not found for this product');
-  }
+  if (!salesOrder) return; // مش error لو مفيش sales order
 
   if (isReturn) {
-    // تقليل كمية المبيعات والإيرادات عند المرتجع
-    sale.quantitySold = Math.max(0, sale.quantitySold - quantity);
-    sale.totalRevenue = Math.max(0, sale.totalRevenue - amount);
-    sale.returnsCount = (sale.returnsCount || 0) + 1;
-    sale.returnedQuantity = (sale.returnedQuantity || 0) + quantity;
-    sale.returnedAmount = (sale.returnedAmount || 0) + amount;
-  } else {
-    // زيادة كمية المبيعات والإيرادات عند إلغاء المرتجع
-    sale.quantitySold += quantity;
-    sale.totalRevenue += amount;
-    sale.returnsCount = Math.max(0, (sale.returnsCount || 0) - 1);
-    sale.returnedQuantity = Math.max(
-      0,
-      (sale.returnedQuantity || 0) - quantity
-    );
-    sale.returnedAmount = Math.max(0, (sale.returnedAmount || 0) - amount);
-  }
+    // ✅ تقليل الـ count والـ subtotal
+    salesOrder.count = Math.max(0, salesOrder.count - quantity);
+    salesOrder.subtotal = Math.max(0, salesOrder.subtotal - amount);
 
-  await sale.save({ session });
-};
+    // ✅ تحديث الـ invoiceSales
+    if (Array.isArray(salesOrder.invoiceSales)) {
+      const invoiceSaleIndex = salesOrder.invoiceSales.findIndex(
+        (is) => is.invoice.toString() === invoiceId.toString()
+      );
 
-// Get all returns with population
-exports.allReturn = async (req, res) => {
-  try {
-    const returns = await Return.find()
-      .populate('customer', 'name email phone')
-      .populate('invoice', 'invoiceNumber totalAmount')
-      .sort('-createdAt');
-
-    res.status(200).json({
-      success: true,
-      results: returns.length,
-      data: returns,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching returns',
-      error: error.message,
-    });
-  }
-};
-
-// Get one return by ID
-exports.oneReturn = async (req, res) => {
-  try {
-    const returnDoc = await Return.findById(req.params.id)
-      .populate('customer', 'name email phone')
-      .populate('invoice', 'invoiceNumber totalAmount items');
-
-    if (!returnDoc) {
-      return res.status(404).json({
-        success: false,
-        message: 'Return not found',
-      });
+      if (invoiceSaleIndex > -1) {
+        salesOrder.invoiceSales[invoiceSaleIndex].quantity = Math.max(
+          0,
+          salesOrder.invoiceSales[invoiceSaleIndex].quantity - quantity
+        );
+        salesOrder.invoiceSales[invoiceSaleIndex].subtotal = Math.max(
+          0,
+          salesOrder.invoiceSales[invoiceSaleIndex].subtotal - amount
+        );
+      }
     }
+  } else {
+    // ✅ زيادة الـ count والـ subtotal عند إلغاء المرتجع
+    salesOrder.count += quantity;
+    salesOrder.subtotal += amount;
 
-    res.status(200).json({
-      success: true,
-      data: returnDoc,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching return',
-      error: error.message,
-    });
+    if (Array.isArray(salesOrder.invoiceSales)) {
+      const invoiceSaleIndex = salesOrder.invoiceSales.findIndex(
+        (is) => is.invoice.toString() === invoiceId.toString()
+      );
+
+      if (invoiceSaleIndex > -1) {
+        salesOrder.invoiceSales[invoiceSaleIndex].quantity += quantity;
+        salesOrder.invoiceSales[invoiceSaleIndex].subtotal += amount;
+      }
+    }
+  }
+
+  salesOrder.lastUpdateDate = new Date();
+
+  // لو الـ count وصل صفر احذف الـ sales order
+  if (salesOrder.count <= 0) {
+    await SalesOrder.deleteOne({ _id: salesOrder._id }).session(session);
+  } else {
+    await salesOrder.save({ session });
   }
 };
 
-// Add return with sales update
-exports.addReturn = async (req, res) => {
+// ============================================================
+// Get All Returns
+// ============================================================
+exports.allReturn = catchAsync(async (req, res, next) => {
+  const returns = await Return.find({ isDeleted: false })
+    .populate('customer', 'name email phone')
+    .populate('invoice', 'invoiceNumber totalAmount')
+    .populate('product', 'name productCode') // ✅ populate product
+    .sort('-createdAt');
+
+  res.status(200).json({
+    status: 'success',
+    results: returns.length,
+    data: returns,
+  });
+});
+
+// ============================================================
+// Get One Return
+// ============================================================
+exports.oneReturn = catchAsync(async (req, res, next) => {
+  const returnDoc = await Return.findOne({
+    _id: req.params.id,
+    isDeleted: false,
+  })
+    .populate('customer', 'name email phone')
+    .populate('invoice', 'invoiceNumber totalAmount items')
+    .populate('product', 'name productCode sellingPrice');
+
+  if (!returnDoc) {
+    return next(new AppError('Return not found', 404));
+  }
+
+  res.status(200).json({
+    status: 'success',
+    data: returnDoc,
+  });
+});
+
+// ============================================================
+// Add Return
+// ============================================================
+exports.addReturn = catchAsync(async (req, res, next) => {
+  // ✅ Validate قبل فتح Session
+  const { invoiceNumber, productName, name, quantity, reason } = req.body;
+
+  if (!invoiceNumber || !productName || !name || !quantity) {
+    return next(
+      new AppError(
+        'invoiceNumber, productName, name, and quantity are required',
+        400
+      )
+    );
+  }
+
+  if (quantity <= 0 || !Number.isInteger(quantity)) {
+    return next(
+      new AppError('Return quantity must be a positive integer', 400)
+    );
+  }
+
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const { invoiceNumber, productName, name, quantity, reason } = req.body;
-
-    if (quantity <= 0) {
-      throw new Error('Return quantity must be greater than zero.');
-    }
-
+    // ─────────────────────────────────────
+    // Find All Related Documents
+    // ─────────────────────────────────────
     const productDoc = await Product.findOne({ name: productName }).session(
       session
     );
-    if (!productDoc) throw new Error('Product not found.');
+    if (!productDoc) throw new AppError('Product not found', 404);
 
     const [customer, invoice, stock] = await Promise.all([
       Customer.findOne({ name }).session(session),
@@ -115,52 +155,88 @@ exports.addReturn = async (req, res) => {
       Stock.findOne({ product: productDoc._id }).session(session),
     ]);
 
-    if (!customer) throw new Error('Customer not found.');
-    if (!invoice) throw new Error('Invoice not found.');
-    if (!stock) throw new Error('Product not found in stock.');
+    if (!customer) throw new AppError('Customer not found', 404);
+    if (!invoice) throw new AppError('Invoice not found', 404);
+    if (!stock) throw new AppError('Product not found in stock', 404);
 
+    // ✅ التحقق إن الفاتورة تبع العميل
+    if (invoice.customer.toString() !== customer._id.toString()) {
+      throw new AppError('Invoice does not belong to this customer', 400);
+    }
+
+    // ─────────────────────────────────────
+    // Find Invoice Item
+    // ─────────────────────────────────────
     const invoiceItem = invoice.items.find(
-      (item) => item.product.toString() === stock.product.toString()
+      (item) => item.product.toString() === productDoc._id.toString()
     );
 
-    if (!invoiceItem) throw new Error('Product not found in invoice.');
+    if (!invoiceItem) {
+      throw new AppError('Product not found in invoice', 404);
+    }
 
-    // Get all returns for this invoice and product
-    const returns = await Return.find({
+    // ─────────────────────────────────────
+    // Check Return Quantity
+    // ─────────────────────────────────────
+    const existingReturns = await Return.find({
       invoice: invoice._id,
-      product: productDoc.name,
+      product: productDoc._id, // ✅ ObjectId مش String
+      isDeleted: false,
+      status: { $ne: 'cancelled' },
     }).session(session);
 
-    // Sum total returned quantity using reduce
-    const alreadyReturnedQty = returns.reduce(
+    const alreadyReturnedQty = existingReturns.reduce(
       (total, ret) => total + ret.quantity,
       0
     );
+
     const remainingQty = invoiceItem.quantity - alreadyReturnedQty;
 
     if (quantity > remainingQty) {
-      throw new Error(
-        `Return quantity exceeds the remaining quantity. Only ${remainingQty} can be returned.`
+      throw new AppError(
+        `Return quantity exceeds remaining quantity. Only ${remainingQty} can be returned.`,
+        400
       );
     }
 
     const refundAmount = invoiceItem.unitPrice * quantity;
 
-    // Update stock
-    stock.quantity += quantity;
-
-    // Create return record
+    // ─────────────────────────────────────
+    // Create Return Record
+    // ✅ product بـ ObjectId مش String
+    // ─────────────────────────────────────
     const returnDoc = new Return({
       invoice: invoice._id,
       customer: customer._id,
-      product: productDoc.name,
-      productId: productDoc._id,
+      product: productDoc._id, // ✅ ObjectId
       quantity,
       reason,
       refundAmount,
+      status: 'active',
     });
 
-    // Update invoice
+    // ─────────────────────────────────────
+    // Create Refund Transaction
+    // ✅ type: 'refund' متطابق مع الـ enum
+    // ─────────────────────────────────────
+    const refundTransaction = new Transaction({
+      type: 'refund', // ✅ مش 'return'
+      referenceId: returnDoc._id,
+      amount: refundAmount,
+      details: `Refund of ${refundAmount} for return of ${quantity} x ${productDoc.name} from invoice #${invoiceNumber}`,
+      items: [],
+      status: 'credit', // ✅ credit لأنه بيرجع فلوس
+    });
+
+    // ─────────────────────────────────────
+    // Update Stock
+    // ─────────────────────────────────────
+    stock.quantity += quantity;
+    stock.lastStockUpdate = new Date();
+
+    // ─────────────────────────────────────
+    // Update Invoice
+    // ─────────────────────────────────────
     if (!invoice.returns) invoice.returns = [];
     invoice.returns.push(returnDoc._id);
     invoice.refunds = (invoice.refunds || 0) + refundAmount;
@@ -168,16 +244,9 @@ exports.addReturn = async (req, res) => {
     invoice.totalAmount = Math.max(0, invoice.totalAmount - refundAmount);
     invoice.balanceDue = Math.max(0, invoice.balanceDue - refundAmount);
 
-    // Create refund transaction
-    const refundTransaction = new Transaction({
-      type: 'return',
-      referenceId: returnDoc._id,
-      amount: -refundAmount,
-      details: `Refund of ${refundAmount} for return of ${quantity} item(s) from invoice ${invoice._id}`,
-      status: 'debit',
-    });
-
-    // Update customer
+    // ─────────────────────────────────────
+    // Update Customer
+    // ─────────────────────────────────────
     customer.transactions.push(refundTransaction._id);
     if (!customer.returns) customer.returns = [];
     customer.returns.push(returnDoc._id);
@@ -187,16 +256,21 @@ exports.addReturn = async (req, res) => {
     );
     customer.balance = Math.max(0, (customer.balance || 0) - refundAmount);
 
-    // Update sales statistics
+    // ─────────────────────────────────────
+    // Update Sales Statistics
+    // ─────────────────────────────────────
     await updateSalesStatistics(
       productDoc._id,
+      invoice._id,
       quantity,
       refundAmount,
       session,
       true
     );
 
-    // Save all changes in parallel
+    // ─────────────────────────────────────
+    // Save All
+    // ─────────────────────────────────────
     await Promise.all([
       stock.save({ session }),
       returnDoc.save({ session }),
@@ -208,24 +282,24 @@ exports.addReturn = async (req, res) => {
     await session.commitTransaction();
 
     res.status(201).json({
-      success: true,
+      status: 'success',
       message: 'Return added successfully',
       data: returnDoc,
     });
   } catch (error) {
     await session.abortTransaction();
-    res.status(500).json({
-      success: false,
-      message: 'Error processing return',
-      error: error.message,
-    });
+    if (error instanceof AppError) return next(error);
+    console.error('Return creation error:', error);
+    next(new AppError('Something went wrong during return creation', 500));
   } finally {
     session.endSession();
   }
-};
+});
 
-// Update return (with restrictions)
-exports.updateReturn = async (req, res) => {
+// ============================================================
+// Update Return
+// ============================================================
+exports.updateReturn = catchAsync(async (req, res, next) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -233,46 +307,53 @@ exports.updateReturn = async (req, res) => {
     const { id } = req.params;
     const updates = req.body;
 
-    // Find existing return
-    const existingReturn = await Return.findById(id).session(session);
+    const existingReturn = await Return.findOne({
+      _id: id,
+      isDeleted: false,
+    }).session(session);
+
     if (!existingReturn) {
-      throw new Error('Return not found');
+      throw new AppError('Return not found', 404);
     }
 
-    // Restrict updates to specific fields only
-    const allowedUpdates = ['reason', 'status', 'notes'];
-    const updateFields = {};
+    if (existingReturn.status === 'processed') {
+      throw new AppError('Cannot update a processed return', 400);
+    }
 
+    // ✅ Allowed updates فقط
+    const allowedUpdates = ['reason', 'status'];
+    const updateFields = {};
     Object.keys(updates).forEach((key) => {
       if (allowedUpdates.includes(key)) {
         updateFields[key] = updates[key];
       }
     });
 
-    // If status is being changed to cancelled
+    // ─────────────────────────────────────
+    // لو بيغير الـ status لـ cancelled
+    // ─────────────────────────────────────
     if (
       updates.status === 'cancelled' &&
       existingReturn.status !== 'cancelled'
     ) {
-      // Reverse the return effects
-      const [product, stock, invoice, customer] = await Promise.all([
-        Product.findOne({ name: existingReturn.product }).session(session),
-        Stock.findOne({ product: existingReturn.productId }).session(session),
+      const [stock, invoice, customer] = await Promise.all([
+        Stock.findOne({ product: existingReturn.product }).session(session),
         Invoice.findById(existingReturn.invoice).session(session),
         Customer.findById(existingReturn.customer).session(session),
       ]);
 
-      if (!product || !stock || !invoice || !customer) {
-        throw new Error('Related records not found');
+      if (!stock || !invoice || !customer) {
+        throw new AppError('Related records not found', 404);
       }
 
-      // Reverse stock update
+      // ✅ Reverse stock
+      if (stock.quantity < existingReturn.quantity) {
+        throw new AppError('Insufficient stock to cancel return', 400);
+      }
       stock.quantity -= existingReturn.quantity;
-      if (stock.quantity < 0) {
-        throw new Error('Insufficient stock to cancel return');
-      }
+      stock.lastStockUpdate = new Date();
 
-      // Reverse invoice updates
+      // ✅ Reverse invoice
       invoice.refunds = Math.max(
         0,
         (invoice.refunds || 0) - existingReturn.refundAmount
@@ -280,31 +361,39 @@ exports.updateReturn = async (req, res) => {
       invoice.subtotal += existingReturn.refundAmount;
       invoice.totalAmount += existingReturn.refundAmount;
       invoice.balanceDue += existingReturn.refundAmount;
+      invoice.returns = (invoice.returns || []).filter(
+        (r) => r.toString() !== id
+      );
 
-      // Create adjustment transaction
+      // ✅ Adjustment Transaction
+      // type: 'return' هو الأقرب للـ enum الموجود
       const adjustmentTransaction = new Transaction({
-        type: 'return_cancellation',
+        type: 'return',
         referenceId: existingReturn._id,
         amount: existingReturn.refundAmount,
-        details: `Cancellation of return ${existingReturn._id} - restored ${existingReturn.refundAmount}`,
-        status: 'credit',
+        details: `Cancellation of return - restored ${existingReturn.refundAmount} for invoice #${invoice.invoiceNumber}`,
+        items: [],
+        status: 'debit',
       });
 
-      // Update customer
+      // ✅ Update customer
       customer.transactions.push(adjustmentTransaction._id);
+      customer.returns = (customer.returns || []).filter(
+        (r) => r.toString() !== id
+      );
       customer.outstandingBalance += existingReturn.refundAmount;
       customer.balance += existingReturn.refundAmount;
 
-      // Update sales statistics (reverse the return)
+      // ✅ Reverse Sales Statistics
       await updateSalesStatistics(
-        existingReturn.productId,
+        existingReturn.product,
+        existingReturn.invoice,
         existingReturn.quantity,
         existingReturn.refundAmount,
         session,
         false
       );
 
-      // Save all changes
       await Promise.all([
         stock.save({ session }),
         invoice.save({ session }),
@@ -313,59 +402,68 @@ exports.updateReturn = async (req, res) => {
       ]);
     }
 
-    // Update the return document
+    // ─────────────────────────────────────
+    // Update Return Document
+    // ─────────────────────────────────────
     Object.assign(existingReturn, updateFields);
     await existingReturn.save({ session });
 
     await session.commitTransaction();
 
     res.status(200).json({
-      success: true,
+      status: 'success',
       message: 'Return updated successfully',
       data: existingReturn,
     });
   } catch (error) {
     await session.abortTransaction();
-    res.status(500).json({
-      success: false,
-      message: 'Error updating return',
-      error: error.message,
-    });
+    if (error instanceof AppError) return next(error);
+    console.error('Return update error:', error);
+    next(new AppError('Something went wrong during return update', 500));
   } finally {
     session.endSession();
   }
-};
+});
 
-// Delete return (soft delete recommended)
-exports.deleteReturn = async (req, res) => {
+// ============================================================
+// Delete Return (Soft Delete)
+// ============================================================
+exports.deleteReturn = catchAsync(async (req, res, next) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
     const { id } = req.params;
 
-    const returnDoc = await Return.findById(id).session(session);
+    const returnDoc = await Return.findOne({
+      _id: id,
+      isDeleted: false,
+    }).session(session);
+
     if (!returnDoc) {
-      throw new Error('Return not found');
+      throw new AppError('Return not found', 404);
     }
 
-    // Check if return can be deleted (e.g., not already processed)
     if (returnDoc.status === 'processed') {
-      throw new Error('Cannot delete a processed return');
+      throw new AppError('Cannot delete a processed return', 400);
     }
 
-    // If deleting an active return, reverse all its effects
+    // ─────────────────────────────────────
+    // لو الـ return لسه active - اعكس التأثيرات
+    // ─────────────────────────────────────
     if (returnDoc.status === 'active') {
-      // Similar logic to cancelling a return
-      const [product, stock, invoice, customer] = await Promise.all([
-        Product.findOne({ name: returnDoc.product }).session(session),
-        Stock.findOne({ product: returnDoc.productId }).session(session),
+      const [stock, invoice, customer] = await Promise.all([
+        Stock.findOne({ product: returnDoc.product }).session(session),
         Invoice.findById(returnDoc.invoice).session(session),
         Customer.findById(returnDoc.customer).session(session),
       ]);
 
       if (stock) {
+        if (stock.quantity < returnDoc.quantity) {
+          throw new AppError('Insufficient stock to delete return', 400);
+        }
         stock.quantity -= returnDoc.quantity;
+        stock.lastStockUpdate = new Date();
         await stock.save({ session });
       }
 
@@ -377,117 +475,126 @@ exports.deleteReturn = async (req, res) => {
         invoice.subtotal += returnDoc.refundAmount;
         invoice.totalAmount += returnDoc.refundAmount;
         invoice.balanceDue += returnDoc.refundAmount;
-        invoice.returns = invoice.returns.filter((r) => r.toString() !== id);
+        invoice.returns = (invoice.returns || []).filter(
+          (r) => r.toString() !== id
+        );
         await invoice.save({ session });
       }
 
       if (customer) {
         customer.outstandingBalance += returnDoc.refundAmount;
         customer.balance += returnDoc.refundAmount;
-        customer.returns = customer.returns.filter((r) => r.toString() !== id);
+        customer.returns = (customer.returns || []).filter(
+          (r) => r.toString() !== id
+        );
         await customer.save({ session });
       }
 
-      // Update sales statistics
-      if (product) {
-        await updateSalesStatistics(
-          returnDoc.productId,
-          returnDoc.quantity,
-          returnDoc.refundAmount,
-          session,
-          false
-        );
-      }
+      // ✅ Reverse Sales Statistics
+      await updateSalesStatistics(
+        returnDoc.product,
+        returnDoc.invoice,
+        returnDoc.quantity,
+        returnDoc.refundAmount,
+        session,
+        false
+      );
     }
 
-    // Soft delete by marking as deleted
+    // ─────────────────────────────────────
+    // Soft Delete
+    // ─────────────────────────────────────
     returnDoc.isDeleted = true;
     returnDoc.deletedAt = new Date();
+    returnDoc.status = 'cancelled';
     await returnDoc.save({ session });
 
     await session.commitTransaction();
 
     res.status(200).json({
-      success: true,
+      status: 'success',
       message: 'Return deleted successfully',
     });
   } catch (error) {
     await session.abortTransaction();
-    res.status(500).json({
-      success: false,
-      message: 'Error deleting return',
-      error: error.message,
-    });
+    if (error instanceof AppError) return next(error);
+    console.error('Return deletion error:', error);
+    next(new AppError('Something went wrong during return deletion', 500));
   } finally {
     session.endSession();
   }
-};
+});
 
-// Get returns by customer
-exports.getReturnsByCustomer = async (req, res) => {
-  try {
-    const { customerId } = req.params;
+// ============================================================
+// Get Returns By Customer
+// ============================================================
+exports.getReturnsByCustomer = catchAsync(async (req, res, next) => {
+  const { customerId } = req.params;
 
-    const returns = await Return.find({
-      customer: customerId,
-      isDeleted: { $ne: true },
-    })
-      .populate('invoice', 'invoiceNumber totalAmount')
-      .sort('-createdAt');
-
-    const summary = {
-      totalReturns: returns.length,
-      totalRefundAmount: returns.reduce(
-        (sum, ret) => sum + (ret.refundAmount || 0),
-        0
-      ),
-      returns,
-    };
-
-    res.status(200).json({
-      success: true,
-      data: summary,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching customer returns',
-      error: error.message,
-    });
+  const customer = await Customer.findById(customerId);
+  if (!customer) {
+    return next(new AppError('Customer not found', 404));
   }
-};
 
-// Get returns by date range
-exports.getReturnsByDateRange = async (req, res) => {
-  try {
-    const { startDate, endDate } = req.query;
+  const returns = await Return.find({
+    customer: customerId,
+    isDeleted: false,
+  })
+    .populate('invoice', 'invoiceNumber totalAmount')
+    .populate('product', 'name productCode')
+    .sort('-createdAt');
 
-    const query = {
-      isDeleted: { $ne: true },
-    };
+  const summary = {
+    totalReturns: returns.length,
+    totalRefundAmount: returns.reduce(
+      (sum, ret) => sum + (ret.refundAmount || 0),
+      0
+    ),
+    returns,
+  };
 
-    if (startDate && endDate) {
-      query.createdAt = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate),
-      };
+  res.status(200).json({
+    status: 'success',
+    data: summary,
+  });
+});
+
+// ============================================================
+// Get Returns By Date Range
+// ============================================================
+exports.getReturnsByDateRange = catchAsync(async (req, res, next) => {
+  const { startDate, endDate } = req.query;
+
+  const query = { isDeleted: false };
+
+  if (startDate && endDate) {
+    // ✅ Validate dates
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return next(new AppError('Invalid date format', 400));
     }
 
-    const returns = await Return.find(query)
-      .populate('customer', 'name')
-      .populate('invoice', 'invoiceNumber')
-      .sort('-createdAt');
+    if (start > end) {
+      return next(new AppError('startDate must be before endDate', 400));
+    }
 
-    res.status(200).json({
-      success: true,
-      results: returns.length,
-      data: returns,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching returns by date',
-      error: error.message,
-    });
+    query.createdAt = {
+      $gte: start,
+      $lte: end,
+    };
   }
-};
+
+  const returns = await Return.find(query)
+    .populate('customer', 'name email')
+    .populate('invoice', 'invoiceNumber')
+    .populate('product', 'name productCode')
+    .sort('-createdAt');
+
+  res.status(200).json({
+    status: 'success',
+    results: returns.length,
+    data: returns,
+  });
+});

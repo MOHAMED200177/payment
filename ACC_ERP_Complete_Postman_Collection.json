@@ -1,0 +1,3518 @@
+{
+  "info": {
+    "_postman_id": "e74f9638-e847-4f0d-9ab1-acc-erp-api-complete",
+    "name": "ACC ERP Backend API - Complete",
+    "description": "Complete API collection auto-generated from project routes/controllers.\n\nCoverage includes: Auth, Customers, Categories, Suppliers, Products, Stock, Invoices, Payments, Returns, Sales Reports, Analytics Reports, Purchase Orders, and negative edge cases.\n\nAuthentication:\n- Run Auth > Login to capture JWT token into collection variable authToken.\n- Protected endpoints send Authorization: Bearer {{authToken}}.\n\nGenerated at: 2026-04-06T23:36:24.635Z",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "System",
+      "description": "Operational endpoints for service availability checks.",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Returns API liveness and uptime metadata."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains uptime\", function () {\n  pm.expect(jsonData).to.have.property('uptime');\n});\n\npm.test(\"Response contains env\", function () {\n  pm.expect(jsonData).to.have.property('env');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "description": "Authentication and user management. Login auto-saves JWT into authToken collection variable.",
+      "item": [
+        {
+          "name": "Bootstrap Register Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Creates first ADMIN user when database has no users.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{adminName}}\",\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 201/403/400\", function () {\n  pm.expect([201,403,400]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Authenticates user and returns JWT token used by protected endpoints.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains success\", function () {\n  pm.expect(jsonData).to.have.property('success');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n\npm.test(\"Auth token is present\", function () {\n\n  pm.expect(jsonData.data).to.have.property(\"token\");\n\n  pm.expect(jsonData.data.token).to.be.a(\"string\").and.not.empty;\n\n});\n\nif (jsonData.data && jsonData.data.token) {\n\n  pm.collectionVariables.set(\"authToken\", jsonData.data.token);\n\n}\n\nif (jsonData.data && jsonData.data.user && jsonData.data.user._id) {\n\n  pm.collectionVariables.set(\"userId\", jsonData.data.user._id);\n\n}\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Get My Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Returns authenticated user profile from JWT."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/401\", function () {\n  pm.expect([200,401]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Create User (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "users"
+              ]
+            },
+            "description": "Creates employee or accountant user. Requires ADMIN role token.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Fatma Hassan\",\n  \"email\": \"fatma.hassan@accerp.com\",\n  \"password\": \"Emp#2026Pass\",\n  \"role\": \"EMPLOYEE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 201/400/401/403\", function () {\n  pm.expect([201,400,401,403]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Login Invalid Credentials (Edge)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Negative test for invalid username/password.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"wrong.user@accerp.com\",\n  \"password\": \"WrongPass123!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 401\", function () {\n  pm.expect([401]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains message\", function () {\n  pm.expect(jsonData).to.have.property('message');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Unauthorized Profile Access (Edge)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer invalid_token_here"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Negative test for missing/invalid token."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 401\", function () {\n  pm.expect([401]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains message\", function () {\n  pm.expect(jsonData).to.have.property('message');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Customers",
+      "description": "Customer CRUD, statements, and exports. All routes require Bearer JWT.",
+      "item": [
+        {
+          "name": "List Customers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/customers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "customers"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "sort",
+                  "value": "-createdAt"
+                }
+              ]
+            },
+            "description": "Returns paginated customers list. Supports filtering via query parameters."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains results\", function () {\n  pm.expect(jsonData).to.have.property('results');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Create Customer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/customers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "customers"
+              ]
+            },
+            "description": "Creates a new customer entity.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{customerName}}\",\n  \"email\": \"accounts@alnoor-pharmacy.com\",\n  \"phone\": \"+201001112223\",\n  \"address\": \"12 Tahrir St, Cairo\",\n  \"balance\": 0,\n  \"outstandingBalance\": 0,\n  \"cash\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 201/400/409\", function () {\n  pm.expect([201,400,409]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n\nconst idValue = jsonData && jsonData.data && jsonData && jsonData.data.data && jsonData && jsonData.data && jsonData && jsonData.data.data._id;\n\nif (idValue) pm.collectionVariables.set('customerId', idValue);\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Get Customer By Name (Profile)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/customers/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "customers",
+                "profile"
+              ]
+            },
+            "description": "Finds one customer by name with related invoices, returns, payments, transactions.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{customerName}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404/400\", function () {\n  pm.expect([200,404,400]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Get Customer By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/customers/{{customerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "customers",
+                "{{customerId}}"
+              ]
+            },
+            "description": "Fetches a single customer by ObjectId."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404\", function () {\n  pm.expect([200,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Update Customer",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/customers/{{customerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "customers",
+                "{{customerId}}"
+              ]
+            },
+            "description": "Updates mutable customer fields.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"address\": \"45 Salah Salem Rd, Cairo\",\n  \"phone\": \"+201001112224\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404/400\", function () {\n  pm.expect([200,404,400]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Customer Statement",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/customers/statement",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "customers",
+                "statement"
+              ]
+            },
+            "description": "Generates customer financial statement by customer name.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{customerName}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404/400\", function () {\n  pm.expect([200,404,400]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains customer\", function () {\n  pm.expect(jsonData).to.have.property('customer');\n});\n\npm.test(\"Response contains totals\", function () {\n  pm.expect(jsonData).to.have.property('totals');\n});\n\npm.test(\"Response contains transactions\", function () {\n  pm.expect(jsonData).to.have.property('transactions');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Customer Statement File (Excel)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/customers/statement/file",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "customers",
+                "statement",
+                "file"
+              ]
+            },
+            "description": "Downloads customer statement as spreadsheet. Body requires customer name.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{customerName}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404/400\", function () {\n  pm.expect([200,404,400]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Export Invoices PDF",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/customers/export/pdf",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "customers",
+                "export",
+                "pdf"
+              ]
+            },
+            "description": "Exports invoice report in PDF format. Implementation may accept date filter body on server side."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404\", function () {\n  pm.expect([200,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Export Invoices Excel",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/customers/export/excel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "customers",
+                "export",
+                "excel"
+              ]
+            },
+            "description": "Exports invoice report in Excel format. Implementation may accept date filter body on server side."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404\", function () {\n  pm.expect([200,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Get Customer Not Found (Edge)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/customers/000000000000000000000000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "customers",
+                "000000000000000000000000"
+              ]
+            },
+            "description": "Negative test for non-existing customer id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 404\", function () {\n  pm.expect([404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains message\", function () {\n  pm.expect(jsonData).to.have.property('message');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Categories",
+      "description": "Category master data APIs.",
+      "item": [
+        {
+          "name": "List Categories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ]
+            },
+            "description": "Returns all categories with pagination/filter support."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Create Category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ]
+            },
+            "description": "Creates a category and optional hierarchy relation.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Analgesics\",\n  \"description\": \"Pain relief products\",\n  \"parentCategory\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 201/400/409\", function () {\n  pm.expect([201,400,409]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n\nconst idValue = jsonData && jsonData.data && jsonData && jsonData.data.data && jsonData && jsonData.data && jsonData && jsonData.data.data._id;\n\nif (idValue) pm.collectionVariables.set('categoryId', idValue);\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Update Category",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{categoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{categoryId}}"
+              ]
+            },
+            "description": "Updates category details.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Pain relief and fever reducers\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404/400\", function () {\n  pm.expect([200,404,400]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Delete Category",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{categoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{categoryId}}"
+              ]
+            },
+            "description": "Deletes category by id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 204/404\", function () {\n  pm.expect([204,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Suppliers",
+      "description": "Supplier CRUD and profile management.",
+      "item": [
+        {
+          "name": "List Suppliers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/supplier",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "supplier"
+              ]
+            },
+            "description": "Returns suppliers list."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Create Supplier",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/supplier",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "supplier"
+              ]
+            },
+            "description": "Creates a supplier record with contact and payment terms.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{supplierName}}\",\n  \"contactPerson\": \"Ahmed Nasser\",\n  \"email\": \"sales@cairomedical.com\",\n  \"phone\": \"+20225551234\",\n  \"address\": {\n    \"street\": \"Industrial Zone 3\",\n    \"city\": \"Giza\",\n    \"state\": \"Giza\",\n    \"country\": \"Egypt\",\n    \"postalCode\": \"12566\"\n  },\n  \"taxNumber\": \"EG-TAX-889913\",\n  \"paymentTerms\": \"net_30\",\n  \"accountNumber\": \"00212234455\",\n  \"active\": true,\n  \"notes\": \"Primary pharmaceutical supplier\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 201/400/409\", function () {\n  pm.expect([201,400,409]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n\nconst idValue = jsonData && jsonData.data && jsonData && jsonData.data.data && jsonData && jsonData.data && jsonData && jsonData.data.data._id;\n\nif (idValue) pm.collectionVariables.set('supplierId', idValue);\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Get Supplier By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/supplier/{{supplierId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "supplier",
+                "{{supplierId}}"
+              ]
+            },
+            "description": "Fetches one supplier by id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404\", function () {\n  pm.expect([200,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Update Supplier",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/supplier/{{supplierId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "supplier",
+                "{{supplierId}}"
+              ]
+            },
+            "description": "Updates supplier details.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Priority deliveries every Monday\",\n  \"paymentTerms\": \"net_15\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404/400\", function () {\n  pm.expect([200,404,400]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Delete Supplier",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/supplier/{{supplierId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "supplier",
+                "{{supplierId}}"
+              ]
+            },
+            "description": "Deletes supplier by id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 204/404\", function () {\n  pm.expect([204,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Products",
+      "description": "Product catalog management with supplier/category validation.",
+      "item": [
+        {
+          "name": "List Products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/product",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "product"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Returns products with populated supplier and category."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Create Product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/product",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "product"
+              ]
+            },
+            "description": "Creates product by supplier/category names, validates pricing.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category\": \"Analgesics\",\n  \"supplier\": \"{{supplierName}}\",\n  \"name\": \"{{productName}}\",\n  \"productCode\": \"PRD-PCM-500\",\n  \"costPrice\": 8.5,\n  \"sellingPrice\": 12.5,\n  \"unit\": \"box\",\n  \"description\": \"Paracetamol tablets 500mg\",\n  \"barcode\": \"6223001234567\",\n  \"taxes\": 14,\n  \"reorderLevel\": 30\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 201/400/404/409\", function () {\n  pm.expect([201,400,404,409]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n\nconst idValue = jsonData && jsonData.data && jsonData && jsonData.data._id;\n\nif (idValue) pm.collectionVariables.set('productId', idValue);\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Get Product By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/product/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "product",
+                "{{productId}}"
+              ]
+            },
+            "description": "Returns one product with category and supplier details."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404\", function () {\n  pm.expect([200,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Update Product",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/product/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "product",
+                "{{productId}}"
+              ]
+            },
+            "description": "Updates product fields like selling price, taxes, and description.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sellingPrice\": 13,\n  \"taxes\": 14,\n  \"reorderLevel\": 25,\n  \"description\": \"Updated product description for 500mg tablets\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404/400\", function () {\n  pm.expect([200,404,400]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Delete Product",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/product/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "product",
+                "{{productId}}"
+              ]
+            },
+            "description": "Deletes product by id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 204/404\", function () {\n  pm.expect([204,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Stock",
+      "description": "Inventory stock quantity and expiry tracking.",
+      "item": [
+        {
+          "name": "List Stock",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/stock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock"
+              ]
+            },
+            "description": "Returns stock records with populated product details."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Create Stock",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/stock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock"
+              ]
+            },
+            "description": "Creates initial stock entry for product by name.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productName\": \"{{productName}}\",\n  \"quantity\": 250,\n  \"batchNumber\": \"BATCH-APR-2026-01\",\n  \"expiryDate\": \"2027-04-30T00:00:00.000Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 201/400/404/409\", function () {\n  pm.expect([201,400,404,409]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n\nconst idValue = jsonData && jsonData.data && jsonData && jsonData.data._id;\n\nif (idValue) pm.collectionVariables.set('stockId', idValue);\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Get Stock By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/stock/{{stockId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock",
+                "{{stockId}}"
+              ]
+            },
+            "description": "Fetches one stock record by id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404\", function () {\n  pm.expect([200,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Update Stock",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/stock/{{stockId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock",
+                "{{stockId}}"
+              ]
+            },
+            "description": "Updates stock quantity or batch metadata.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 220,\n  \"batchNumber\": \"BATCH-APR-2026-01A\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404/400\", function () {\n  pm.expect([200,404,400]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Delete Stock",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/stock/{{stockId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock",
+                "{{stockId}}"
+              ]
+            },
+            "description": "Deletes stock entry by id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 204/404\", function () {\n  pm.expect([204,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Invoices",
+      "description": "Invoice lifecycle operations including create, update, status transition, and deletion.",
+      "item": [
+        {
+          "name": "List Invoices",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/invoices",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "invoices"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Returns all invoices with pagination."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Create Invoice",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/invoices/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "invoices",
+                "create"
+              ]
+            },
+            "description": "Creates invoice with customer info and product line items, updates stock and transactions.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{customerName}}\",\n  \"email\": \"accounts@alnoor-pharmacy.com\",\n  \"phone\": \"+201001112223\",\n  \"items\": [\n    {\n      \"product\": \"{{productName}}\",\n      \"quantity\": 3\n    }\n  ],\n  \"amount\": 20,\n  \"discount\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 201/400/404\", function () {\n  pm.expect([201,400,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n\nconst createdInvoiceId = jsonData && jsonData.data && (jsonData.data._id || (jsonData.data.invoice && jsonData.data.invoice._id));\n\nif (createdInvoiceId) pm.collectionVariables.set(\"invoiceId\", createdInvoiceId);\n\nconst createdInvoiceNumber = jsonData && jsonData.data && (jsonData.data.invoiceNumber || (jsonData.data.invoice && jsonData.data.invoice.invoiceNumber));\n\nif (createdInvoiceNumber) pm.collectionVariables.set(\"invoiceNumber\", String(createdInvoiceNumber));\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Get Invoice By Number",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/invoices/info",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "invoices",
+                "info"
+              ]
+            },
+            "description": "Retrieves invoice details using invoice number.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceNumber\": \"{{invoiceNumber}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404/400\", function () {\n  pm.expect([200,404,400]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n\nconst invoiceObj = jsonData && jsonData.data && (jsonData.data.data || jsonData.data);\n\nif (invoiceObj && invoiceObj._id) pm.collectionVariables.set(\"invoiceId\", invoiceObj._id);\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Get Invoice By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/invoices/{{invoiceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "invoices",
+                "{{invoiceId}}"
+              ]
+            },
+            "description": "Fetches single invoice by id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404\", function () {\n  pm.expect([200,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Update Invoice",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/invoices/{{invoiceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "invoices",
+                "{{invoiceId}}"
+              ]
+            },
+            "description": "Updates invoice data and recalculates totals as needed.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"discount\": 10,\n  \"amount\": 30,\n  \"notes\": \"Updated after customer negotiation\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/400/404\", function () {\n  pm.expect([200,400,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Update Invoice Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/invoices/{{invoiceId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "invoices",
+                "{{invoiceId}}",
+                "status"
+              ]
+            },
+            "description": "Transitions invoice status. For paid status, paymentAmount records payment.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"paid\",\n  \"paymentAmount\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/400/404\", function () {\n  pm.expect([200,400,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Delete Invoice",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/invoices/{{invoiceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "invoices",
+                "{{invoiceId}}"
+              ]
+            },
+            "description": "Deletes invoice and related transactions."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404\", function () {\n  pm.expect([200,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains message\", function () {\n  pm.expect(jsonData).to.have.property('message');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "description": "Customer payment processing and payment history.",
+      "item": [
+        {
+          "name": "List Payments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payment",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payment"
+              ]
+            },
+            "description": "Returns payments list with customer/invoice references."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Add Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payment/add",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payment",
+                "add"
+              ]
+            },
+            "description": "Creates payment for a customer with optional invoice number.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{customerName}}\",\n  \"amount\": 50,\n  \"invoiceNumber\": \"{{invoiceNumber}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 201/400/404\", function () {\n  pm.expect([201,400,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n\nconst paymentObj = jsonData && jsonData.data && (jsonData.data.payment || jsonData.data);\n\nif (paymentObj && paymentObj._id) pm.collectionVariables.set(\"paymentId\", paymentObj._id);\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Get Payment By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payment/{{paymentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payment",
+                "{{paymentId}}"
+              ]
+            },
+            "description": "Fetches payment details by id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404\", function () {\n  pm.expect([200,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Update Payment",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payment/{{paymentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payment",
+                "{{paymentId}}"
+              ]
+            },
+            "description": "Updates payment attributes such as amount, method, notes.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 40,\n  \"method\": \"Bank Transfer\",\n  \"notes\": \"Corrected transfer amount\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/400/404\", function () {\n  pm.expect([200,400,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Delete Payment",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payment/{{paymentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payment",
+                "{{paymentId}}"
+              ]
+            },
+            "description": "Deletes a payment and reverts related balances."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404\", function () {\n  pm.expect([200,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains message\", function () {\n  pm.expect(jsonData).to.have.property('message');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Returns",
+      "description": "Sales return retrieval and management endpoints. Create return route is currently not exposed in router.",
+      "item": [
+        {
+          "name": "List Returns",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/return",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "return"
+              ]
+            },
+            "description": "Returns all return records."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Get Return By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/return/{{returnId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "return",
+                "{{returnId}}"
+              ]
+            },
+            "description": "Fetches return record by id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404\", function () {\n  pm.expect([200,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Update Return",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/return/{{returnId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "return",
+                "{{returnId}}"
+              ]
+            },
+            "description": "Updates mutable fields on return record.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Customer changed medication\",\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/400/404\", function () {\n  pm.expect([200,400,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Delete Return",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/return/{{returnId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "return",
+                "{{returnId}}"
+              ]
+            },
+            "description": "Soft-deletes return and restores stock/customer balances according to business logic."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404\", function () {\n  pm.expect([200,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains message\", function () {\n  pm.expect(jsonData).to.have.property('message');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Sales Reports",
+      "description": "Business report endpoints under /sales. These routes are mounted without protect middleware in app.js.",
+      "item": [
+        {
+          "name": "Comprehensive Financial Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sales/financial",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sales",
+                "financial"
+              ]
+            },
+            "description": "Builds financial report with revenue, refunds, net sales, and breakdowns.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"startDate\": \"2026-01-01T00:00:00.000Z\",\n  \"endDate\": \"2026-03-31T23:59:59.999Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/400\", function () {\n  pm.expect([200,400]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Top Products Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sales/top-products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sales",
+                "top-products"
+              ]
+            },
+            "description": "Returns top products by quantity or revenue.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"startDate\": \"2026-01-01T00:00:00.000Z\",\n  \"endDate\": \"2026-03-31T23:59:59.999Z\",\n  \"limit\": 10,\n  \"sortBy\": \"quantity\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/400\", function () {\n  pm.expect([200,400]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Customer Analysis Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sales/customer-analysis",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sales",
+                "customer-analysis"
+              ]
+            },
+            "description": "Returns customer purchasing and payment behavior analysis.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"startDate\": \"2026-01-01T00:00:00.000Z\",\n  \"endDate\": \"2026-03-31T23:59:59.999Z\",\n  \"limit\": 15\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/400\", function () {\n  pm.expect([200,400]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Sales By Category Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/sales/sales-by-category",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sales",
+                "sales-by-category"
+              ]
+            },
+            "description": "Aggregates sales by product category for selected period.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"startDate\": \"2026-01-01T00:00:00.000Z\",\n  \"endDate\": \"2026-03-31T23:59:59.999Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/400\", function () {\n  pm.expect([200,400]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Analytics Reports",
+      "description": "Advanced analytics endpoints under /reports (JWT protected).",
+      "item": [
+        {
+          "name": "Sales Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/sales",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "sales"
+              ],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-01-01T00:00:00.000Z"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-03-31T23:59:59.999Z"
+                },
+                {
+                  "key": "period",
+                  "value": "monthly"
+                }
+              ]
+            },
+            "description": "Returns high-level sales summary for selected date range."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains success\", function () {\n  pm.expect(jsonData).to.have.property('success');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Revenue Trend",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/sales/trend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "sales",
+                "trend"
+              ],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-01-01T00:00:00.000Z"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-03-31T23:59:59.999Z"
+                },
+                {
+                  "key": "granularity",
+                  "value": "month"
+                }
+              ]
+            },
+            "description": "Returns time-series revenue trend."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains success\", function () {\n  pm.expect(jsonData).to.have.property('success');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Top Products Analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/sales/top-products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "sales",
+                "top-products"
+              ],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-01-01T00:00:00.000Z"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-03-31T23:59:59.999Z"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "quantity"
+                }
+              ]
+            },
+            "description": "Returns top-selling products list."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains success\", function () {\n  pm.expect(jsonData).to.have.property('success');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Sales By Customer",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/sales/by-customer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "sales",
+                "by-customer"
+              ],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-01-01T00:00:00.000Z"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-03-31T23:59:59.999Z"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Returns sales contribution by customer."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains success\", function () {\n  pm.expect(jsonData).to.have.property('success');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Profit Per Sale",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/sales/profit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "sales",
+                "profit"
+              ],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-01-01T00:00:00.000Z"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-03-31T23:59:59.999Z"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Returns per-sale profitability with pagination metadata."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains success\", function () {\n  pm.expect(jsonData).to.have.property('success');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n\npm.test(\"Response contains meta\", function () {\n  pm.expect(jsonData).to.have.property('meta');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Inventory Levels",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/inventory",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "inventory"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "lowStockOnly",
+                  "value": "false"
+                }
+              ]
+            },
+            "description": "Returns stock levels and inventory summary."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains success\", function () {\n  pm.expect(jsonData).to.have.property('success');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n\npm.test(\"Response contains summary\", function () {\n  pm.expect(jsonData).to.have.property('summary');\n});\n\npm.test(\"Response contains meta\", function () {\n  pm.expect(jsonData).to.have.property('meta');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Inventory Movement",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/inventory/movement",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "inventory",
+                "movement"
+              ],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-01-01T00:00:00.000Z"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-03-31T23:59:59.999Z"
+                },
+                {
+                  "key": "productId",
+                  "value": "{{productId}}"
+                }
+              ]
+            },
+            "description": "Returns stock movement history for optional product."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains success\", function () {\n  pm.expect(jsonData).to.have.property('success');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Dead Stock",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/inventory/dead-stock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "inventory",
+                "dead-stock"
+              ],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-01-01T00:00:00.000Z"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-03-31T23:59:59.999Z"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Returns products with low/no movement."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains success\", function () {\n  pm.expect(jsonData).to.have.property('success');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Most Used Products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/inventory/most-used",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "inventory",
+                "most-used"
+              ],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-01-01T00:00:00.000Z"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-03-31T23:59:59.999Z"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Returns products with highest usage in period."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains success\", function () {\n  pm.expect(jsonData).to.have.property('success');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Top Customers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/customers/top",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "customers",
+                "top"
+              ],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-01-01T00:00:00.000Z"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-03-31T23:59:59.999Z"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Returns top customers by sales contribution."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains success\", function () {\n  pm.expect(jsonData).to.have.property('success');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Customer Debt Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/customers/debt",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "customers",
+                "debt"
+              ]
+            },
+            "description": "Returns customer outstanding balances and summary."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains success\", function () {\n  pm.expect(jsonData).to.have.property('success');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n\npm.test(\"Response contains summary\", function () {\n  pm.expect(jsonData).to.have.property('summary');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Customer Statement Analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/customers/{{reportCustomerId}}/statement",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "customers",
+                "{{reportCustomerId}}",
+                "statement"
+              ],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-01-01T00:00:00.000Z"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-03-31T23:59:59.999Z"
+                }
+              ]
+            },
+            "description": "Returns one customer statement by customer id and date range."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404\", function () {\n  pm.expect([200,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains success\", function () {\n  pm.expect(jsonData).to.have.property('success');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Supplier Outstanding Balances",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/suppliers/outstanding",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "suppliers",
+                "outstanding"
+              ]
+            },
+            "description": "Returns supplier balances outstanding summary."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains success\", function () {\n  pm.expect(jsonData).to.have.property('success');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n\npm.test(\"Response contains summary\", function () {\n  pm.expect(jsonData).to.have.property('summary');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Supplier Statement",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/suppliers/{{reportSupplierId}}/statement",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "suppliers",
+                "{{reportSupplierId}}",
+                "statement"
+              ],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-01-01T00:00:00.000Z"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-03-31T23:59:59.999Z"
+                }
+              ]
+            },
+            "description": "Returns one supplier statement by supplier id and date range."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404\", function () {\n  pm.expect([200,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains success\", function () {\n  pm.expect(jsonData).to.have.property('success');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Financial Summary Analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reports/financial-summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "financial-summary"
+              ],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-01-01T00:00:00.000Z"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-03-31T23:59:59.999Z"
+                }
+              ]
+            },
+            "description": "Returns consolidated financial summary for selected period."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains success\", function () {\n  pm.expect(jsonData).to.have.property('success');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Purchase Orders",
+      "description": "Purchase order creation, receiving, payment, cancellation, and stats.",
+      "item": [
+        {
+          "name": "List Purchase Orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/purchase-orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchase-orders"
+              ]
+            },
+            "description": "Returns purchase orders list."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Create Purchase Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/purchase-orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchase-orders"
+              ]
+            },
+            "description": "Creates purchase order from supplier name and item lines.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"supplierName\": \"{{supplierName}}\",\n  \"items\": [\n    {\n      \"product\": \"{{productId}}\",\n      \"quantity\": 100,\n      \"unitCost\": 7.5\n    }\n  ],\n  \"discount\": 2,\n  \"tax\": 14,\n  \"expectedDeliveryDate\": \"2026-05-20T00:00:00.000Z\",\n  \"notes\": \"Urgent refill for Q2 demand\",\n  \"amountPaid\": 200\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 201/400/404\", function () {\n  pm.expect([201,400,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n\nconst poObj = jsonData && jsonData.data;\n\nif (poObj && poObj._id) pm.collectionVariables.set(\"purchaseOrderId\", poObj._id);\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Purchase Order Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/purchase-orders/stats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchase-orders",
+                "stats"
+              ]
+            },
+            "description": "Returns purchase order KPIs and aggregates."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200\", function () {\n  pm.expect([200]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Get Purchase Order By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/purchase-orders/{{purchaseOrderId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchase-orders",
+                "{{purchaseOrderId}}"
+              ]
+            },
+            "description": "Fetches one purchase order by id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404\", function () {\n  pm.expect([200,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Receive Purchase Order Items",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/purchase-orders/{{purchaseOrderId}}/receive",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchase-orders",
+                "{{purchaseOrderId}}",
+                "receive"
+              ]
+            },
+            "description": "Marks items as received and updates stock quantities.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"product\": \"{{productId}}\",\n      \"receivedQuantity\": 60\n    }\n  ],\n  \"notes\": \"Partial receipt from supplier shipment #1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/400/404\", function () {\n  pm.expect([200,400,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Add Supplier Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/purchase-orders/{{purchaseOrderId}}/payment",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchase-orders",
+                "{{purchaseOrderId}}",
+                "payment"
+              ]
+            },
+            "description": "Registers payment against purchase order payable.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 350,\n  \"method\": \"Bank Transfer\",\n  \"notes\": \"Transfer ref: BT-PO-2026-0041\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/400/404\", function () {\n  pm.expect([200,400,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Cancel Purchase Order",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/purchase-orders/{{purchaseOrderId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchase-orders",
+                "{{purchaseOrderId}}",
+                "cancel"
+              ]
+            },
+            "description": "Cancels a non-fully-received purchase order and reverts received stock where applicable.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Supplier failed to meet quality requirements\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/400/404\", function () {\n  pm.expect([200,400,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains data\", function () {\n  pm.expect(jsonData).to.have.property('data');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Delete Purchase Order",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/purchase-orders/{{purchaseOrderId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchase-orders",
+                "{{purchaseOrderId}}"
+              ]
+            },
+            "description": "Deletes purchase order record by id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 200/404\", function () {\n  pm.expect([200,404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains message\", function () {\n  pm.expect(jsonData).to.have.property('message');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Edge Cases",
+      "description": "Negative scenarios for invalid input, unauthorized access, and not found resources.",
+      "item": [
+        {
+          "name": "Invalid Product Input",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/product",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "product"
+              ]
+            },
+            "description": "Attempts product creation with invalid negative pricing to validate input handling.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category\": \"Analgesics\",\n  \"supplier\": \"{{supplierName}}\",\n  \"name\": \"Broken Product\",\n  \"productCode\": \"BROKEN-001\",\n  \"costPrice\": -5,\n  \"sellingPrice\": -1,\n  \"unit\": \"box\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 400\", function () {\n  pm.expect([400]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains message\", function () {\n  pm.expect(jsonData).to.have.property('message');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Unauthorized Protected Endpoint",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer expired_or_invalid_token"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/customers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "customers"
+              ]
+            },
+            "description": "Verifies protected endpoint rejects invalid token."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 401\", function () {\n  pm.expect([401]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains message\", function () {\n  pm.expect(jsonData).to.have.property('message');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Not Found Purchase Order",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/purchase-orders/000000000000000000000000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "purchase-orders",
+                "000000000000000000000000"
+              ]
+            },
+            "description": "Verifies not-found handling for unknown purchase order id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": "pm.test(\"Status code is one of 404\", function () {\n  pm.expect([404]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n\npm.test(\"Response contains message\", function () {\n  pm.expect(jsonData).to.have.property('message');\n});\n"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "adminEmail",
+      "value": "admin@accerp.com",
+      "type": "string"
+    },
+    {
+      "key": "adminPassword",
+      "value": "Admin#2026!",
+      "type": "string"
+    },
+    {
+      "key": "adminName",
+      "value": "System Administrator",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "customerId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "customerName",
+      "value": "Al Noor Pharmacy",
+      "type": "string"
+    },
+    {
+      "key": "invoiceId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "invoiceNumber",
+      "value": "1001",
+      "type": "string"
+    },
+    {
+      "key": "paymentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "returnId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "stockId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "productId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "productName",
+      "value": "Paracetamol 500mg",
+      "type": "string"
+    },
+    {
+      "key": "supplierId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "supplierName",
+      "value": "Cairo Medical Supplies",
+      "type": "string"
+    },
+    {
+      "key": "categoryId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "purchaseOrderId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "reportCustomerId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "reportSupplierId",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}
