@@ -44,7 +44,7 @@
       "description": "Authentication and user management. Login auto-saves JWT into authToken collection variable.",
       "item": [
         {
-          "name": "Bootstrap Register Admin",
+          "name": "Register (signup)",
           "request": {
             "method": "POST",
             "header": [
@@ -63,7 +63,7 @@
                 "register"
               ]
             },
-            "description": "Creates first ADMIN user when database has no users.",
+            "description": "Public signup: creates a new account (email must be unique). Returns JWT like login.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"{{adminName}}\",\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
@@ -79,7 +79,7 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": "pm.test(\"Status code is one of 201/403/400\", function () {\n  pm.expect([201,403,400]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n"
+                "exec": "pm.test(\"Status code is one of 201/409/400\", function () {\n  pm.expect([201,409,400]).to.include(pm.response.code);\n});\n\npm.test(\"Response is JSON\", function () {\n  pm.response.to.be.json;\n});\n\nlet jsonData = {};\ntry { jsonData = pm.response.json(); } catch (e) { jsonData = {}; }\n\npm.test(\"Response contains status\", function () {\n  pm.expect(jsonData).to.have.property('status');\n});\n"
               }
             }
           ],

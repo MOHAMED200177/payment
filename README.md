@@ -4,6 +4,14 @@
 
 This is a **Node.js / Express + MongoDB (Mongoose)** backend for an **Inventory & Sales Management System** tailored for a **pharmacy / medical supplies** business. It manages the full lifecycle of products, customers, invoicing, returns, payments, stock, purchase orders, prescriptions, expenses, and reporting — with PDF/Excel export capabilities.
 
+### Authentication
+
+- **POST `/auth/register`** — public signup (name, email, password). New users get role `USER` and receive a **JWT** in the response (same shape as login).
+- **POST `/auth/login`** — email + password → JWT.
+- **GET `/auth/me`** — current user (requires `Authorization: Bearer`).
+
+There is no “first admin only” or tenant-gated registration; duplicate emails return **409**.
+
 ---
 
 ## Tech Stack

@@ -9,10 +9,7 @@ const SalesOrder = require('../models/sales');
 const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
 
-// ============================================================
-// Helper - Update Sales Statistics
-// ✅ متطابق مع الـ SalesOrder Model
-// ============================================================
+
 const updateSalesStatistics = async (
   productId,
   invoiceId,
@@ -25,14 +22,13 @@ const updateSalesStatistics = async (
     product: productId,
   }).session(session);
 
-  if (!salesOrder) return; // مش error لو مفيش sales order
+  if (!salesOrder) return;
 
   if (isReturn) {
-    // ✅ تقليل الـ count والـ subtotal
+
     salesOrder.count = Math.max(0, salesOrder.count - quantity);
     salesOrder.subtotal = Math.max(0, salesOrder.subtotal - amount);
 
-    // ✅ تحديث الـ invoiceSales
     if (Array.isArray(salesOrder.invoiceSales)) {
       const invoiceSaleIndex = salesOrder.invoiceSales.findIndex(
         (is) => is.invoice.toString() === invoiceId.toString()
@@ -68,7 +64,6 @@ const updateSalesStatistics = async (
 
   salesOrder.lastUpdateDate = new Date();
 
-  // لو الـ count وصل صفر احذف الـ sales order
   if (salesOrder.count <= 0) {
     await SalesOrder.deleteOne({ _id: salesOrder._id }).session(session);
   } else {
@@ -119,7 +114,6 @@ exports.oneReturn = catchAsync(async (req, res, next) => {
 // Add Return
 // ============================================================
 exports.addReturn = catchAsync(async (req, res, next) => {
-  // ✅ Validate قبل فتح Session
   const { invoiceNumber, productName, name, quantity, reason } = req.body;
 
   if (!invoiceNumber || !productName || !name || !quantity) {
@@ -159,7 +153,6 @@ exports.addReturn = catchAsync(async (req, res, next) => {
     if (!invoice) throw new AppError('Invoice not found', 404);
     if (!stock) throw new AppError('Product not found in stock', 404);
 
-    // ✅ التحقق إن الفاتورة تبع العميل
     if (invoice.customer.toString() !== customer._id.toString()) {
       throw new AppError('Invoice does not belong to this customer', 400);
     }
@@ -180,7 +173,7 @@ exports.addReturn = catchAsync(async (req, res, next) => {
     // ─────────────────────────────────────
     const existingReturns = await Return.find({
       invoice: invoice._id,
-      product: productDoc._id, // ✅ ObjectId مش String
+      product: productDoc._id,
       isDeleted: false,
       status: { $ne: 'cancelled' },
     }).session(session);
@@ -201,14 +194,11 @@ exports.addReturn = catchAsync(async (req, res, next) => {
 
     const refundAmount = invoiceItem.unitPrice * quantity;
 
-    // ─────────────────────────────────────
-    // Create Return Record
-    // ✅ product بـ ObjectId مش String
-    // ─────────────────────────────────────
+
     const returnDoc = new Return({
       invoice: invoice._id,
       customer: customer._id,
-      product: productDoc._id, // ✅ ObjectId
+      product: productDoc._id,
       quantity,
       reason,
       refundAmount,

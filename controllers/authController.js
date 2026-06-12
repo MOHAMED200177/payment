@@ -11,7 +11,9 @@ exports.login = catchAsync(async (req, res, next) => {
     return next(new AppError('Please provide email and password', 400));
   }
 
-  const user = await User.findOne({ email }).select('+password');
+  const user = await User.findOne({ email: email.trim().toLowerCase() }).select(
+    '+password'
+  );
   if (!user || !(await user.correctPassword(password))) {
     return next(new AppError('Incorrect email or password', 401));
   }
@@ -30,71 +32,42 @@ exports.login = catchAsync(async (req, res, next) => {
   });
 });
 
-/** First admin only — when database has zero users */
-exports.registerBootstrap = catchAsync(async (req, res, next) => {
-  const count = await User.countDocuments();
-  if (count > 0) {
-    return next(
-      new AppError(
-        'Registration is disabled. Sign in as admin to create users.',
-        403
-      )
-    );
-  }
-
+/**
+ * Public signup — any user may register (email unique).
+ * No "first admin only" or tenant gate.
+ */
+exports.register = catchAsync(async (req, res, next) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password) {
     return next(new AppError('Please provide name, email, and password', 400));
   }
+  if (String(password).length < 8) {
+    return next(new AppError('Password must be at least 8 characters', 400));
+  }
+
+  const emailNorm = String(email).trim().toLowerCase();
+  const existing = await User.findOne({ email: emailNorm });
+  if (existing) {
+    return next(new AppError('An account with this email already exists', 409));
+  }
 
   const user = await User.create({
-    name,
-    email,
+    name: String(name).trim(),
+    email: emailNorm,
     password,
-    role: 'ADMIN',
+    role: 'USER',
   });
 
   const token = signToken(user._id);
-  logger.info(`Bootstrap admin created: ${user.email}`);
+  logger.info(`User registered: ${user.email}`);
 
   sendSuccess(res, 201, {
-    message: 'Administrator account created',
+    message: 'Account created successfully',
     data: {
       token,
+      expiresIn: process.env.JWT_EXPIRES_IN || '7d',
       user: user.toSafeJSON(),
     },
-  });
-});
-
-exports.createUser = catchAsync(async (req, res, next) => {
-  const { name, email, password, role } = req.body;
-  if (!name || !email || !password) {
-    return next(new AppError('Please provide name, email, and password', 400));
-  }
-
-  if (role && !User.ROLES.includes(role)) {
-    return next(
-      new AppError(`Invalid role. Use one of: ${User.ROLES.join(', ')}`, 400)
-    );
-  }
-
-  const existing = await User.findOne({ email });
-  if (existing) {
-    return next(new AppError('Email already in use', 400));
-  }
-
-  const user = await User.create({
-    name,
-    email,
-    password,
-    role: role || 'EMPLOYEE',
-  });
-
-  logger.info(`User created by admin: ${user.email}`);
-
-  sendSuccess(res, 201, {
-    message: 'User created',
-    data: { user: user.toSafeJSON() },
   });
 });
 

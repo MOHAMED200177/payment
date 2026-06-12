@@ -4,30 +4,21 @@ const Product = require('../models/product');
 const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
 
-// ============================================================
-// Populate Options
-// ============================================================
 const populateOptions = [
   { path: 'product', select: 'name productCode sellingPrice reorderLevel' },
 ];
 
-// ============================================================
-// Create Stock
-// ============================================================
 exports.createStock = catchAsync(async (req, res, next) => {
   const { productName, quantity, batchNumber, expiryDate } = req.body;
 
-  // ✅ Validate required fields
   if (!productName || quantity === undefined) {
     return next(new AppError('productName and quantity are required', 400));
   }
 
-  // ✅ Validate quantity
   if (quantity < 0 || !Number.isInteger(quantity)) {
     return next(new AppError('Quantity must be a non-negative integer', 400));
   }
 
-  // ✅ Validate expiryDate لو موجود
   if (expiryDate) {
     const expiry = new Date(expiryDate);
     if (isNaN(expiry.getTime())) {
@@ -38,13 +29,11 @@ exports.createStock = catchAsync(async (req, res, next) => {
     }
   }
 
-  // ✅ Find Product
   const product = await Product.findOne({ name: productName });
   if (!product) {
     return next(new AppError('No product found with that name', 404));
   }
 
-  // ✅ Check للـ duplicate stock
   const existingStock = await Stock.findOne({ product: product._id });
   if (existingStock) {
     return next(
@@ -55,7 +44,6 @@ exports.createStock = catchAsync(async (req, res, next) => {
     );
   }
 
-  // ✅ Create Stock
   const stock = await Stock.create({
     product: product._id,
     quantity,
@@ -64,7 +52,7 @@ exports.createStock = catchAsync(async (req, res, next) => {
     lastStockUpdate: new Date(),
   });
 
-  // ✅ Populate الـ response
+
   const populatedStock = await Stock.findById(stock._id).populate(
     'product',
     'name productCode sellingPrice reorderLevel'
@@ -76,17 +64,12 @@ exports.createStock = catchAsync(async (req, res, next) => {
   });
 });
 
-// ============================================================
-// Get Low Stock Alert
-// ✅ مهم جداً للصيدليات
-// ============================================================
 exports.getLowStock = catchAsync(async (req, res, next) => {
   const stocks = await Stock.find().populate(
     'product',
     'name productCode reorderLevel sellingPrice'
   );
 
-  // ✅ فلتر المنتجات اللي وصلت للـ reorder level
   const lowStockItems = stocks.filter(
     (stock) =>
       stock.product && stock.quantity <= (stock.product.reorderLevel || 10)
@@ -106,10 +89,7 @@ exports.getLowStock = catchAsync(async (req, res, next) => {
   });
 });
 
-// ============================================================
-// Get Expiring Soon Alert
-// ✅ مهم جداً للصيدليات
-// ============================================================
+
 exports.getExpiringSoon = catchAsync(async (req, res, next) => {
   const { days = 30 } = req.query;
 
@@ -167,9 +147,6 @@ exports.getExpiredStock = catchAsync(async (req, res, next) => {
   });
 });
 
-// ============================================================
-// CRUD Operations
-// ============================================================
 exports.allStock = Crud.getAll(Stock, populateOptions);
 exports.updateStock = Crud.updateOne(Stock);
 exports.oneStock = Crud.getOneById(Stock, populateOptions);

@@ -1,7 +1,8 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
-const ROLES = ['ADMIN', 'EMPLOYEE', 'ACCOUNTANT'];
+/** USER = self-registered app account; other roles reserved for staff if needed later */
+const ROLES = ['USER', 'ADMIN', 'EMPLOYEE', 'ACCOUNTANT'];
 
 const userSchema = new mongoose.Schema(
   {
@@ -22,7 +23,7 @@ const userSchema = new mongoose.Schema(
     role: {
       type: String,
       enum: ROLES,
-      default: 'EMPLOYEE',
+      default: 'USER',
     },
     active: { type: Boolean, default: true },
   },
