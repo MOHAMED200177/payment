@@ -4,8 +4,8 @@
  * Centralised aggregation / query logic for
  * every report the ERP exposes.
  *
- * Each function returns plain objects (no res/req)
- * so the controller layer can compose responses.
+ * IMPORTANT: Every function REQUIRES a companyId parameter.
+ * Without it the aggregate will span all tenants.
  * ─────────────────────────────────────────────
  */
 
@@ -42,6 +42,15 @@ function paginate(page = 1, limit = 50) {
   return { skip: (p - 1) * l, limit: l, page: p };
 }
 
+/**
+ * Convert a companyId string/ObjectId to a proper ObjectId for aggregations.
+ * This prevents cross-tenant queries in $match stages.
+ */
+function toObjId(companyId) {
+  if (!companyId) throw new Error('companyId is required for all report queries');
+  return new mongoose.Types.ObjectId(companyId.toString());
+}
+
 // ═══════════════════════════════════════════════════════════
 //  A) SALES REPORTS
 // ═══════════════════════════════════════════════════════════
@@ -49,9 +58,9 @@ function paginate(page = 1, limit = 50) {
 /**
  * Sales summary — totals, averages, period breakdown
  */
-exports.getSalesSummary = async ({ startDate, endDate, period = 'monthly' }) => {
+exports.getSalesSummary = async ({ companyId, startDate, endDate, period = 'monthly' }) => {
   const dr = dateRange(startDate, endDate);
-  const match = { isDeleted: { $ne: true } };
+  const match = { company: toObjId(companyId), isDeleted: { $ne: true } };
   if (dr) match.issueDate = dr;
 
   // Totals
@@ -150,9 +159,9 @@ exports.getSalesSummary = async ({ startDate, endDate, period = 'monthly' }) => 
 /**
  * Revenue trend — time-series
  */
-exports.getRevenueTrend = async ({ startDate, endDate, granularity = 'monthly' }) => {
+exports.getRevenueTrend = async ({ companyId, startDate, endDate, granularity = 'monthly' }) => {
   const dr = dateRange(startDate, endDate);
-  const match = { isDeleted: { $ne: true } };
+  const match = { company: toObjId(companyId), isDeleted: { $ne: true } };
   if (dr) match.issueDate = dr;
 
   const groupId = {
@@ -181,9 +190,10 @@ exports.getRevenueTrend = async ({ startDate, endDate, granularity = 'monthly' }
 /**
  * Top selling products
  */
-exports.getTopSellingProducts = async ({ startDate, endDate, limit = 10, sortBy = 'revenue' }) => {
+exports.getTopProducts = async ({ companyId, startDate, endDate, page, limit }) => {
+  const { skip, limit: lim, page: p } = paginate(page, limit);
   const dr = dateRange(startDate, endDate);
-  const match = { isDeleted: { $ne: true } };
+  const match = { company: toObjId(companyId), isDeleted: { $ne: true } };
   if (dr) match.issueDate = dr;
 
   const data = await Invoice.aggregate([
@@ -236,19 +246,21 @@ exports.getTopSellingProducts = async ({ startDate, endDate, limit = 10, sortBy 
         },
       },
     },
-    { $sort: sortBy === 'quantity' ? { totalQuantity: -1 } : { totalRevenue: -1 } },
-    { $limit: Math.min(Number(limit) || 10, 100) },
+    { $sort: { totalRevenue: -1 } },
+    { $skip: skip },
+    { $limit: lim },
   ]);
 
-  return data;
+  return { data, page: p, limit: lim };
 };
 
 /**
  * Sales by customer
  */
-exports.getSalesByCustomer = async ({ startDate, endDate, limit = 20 }) => {
+exports.getSalesByCustomer = async ({ companyId, startDate, endDate, page, limit }) => {
+  const { skip, limit: lim, page: p } = paginate(page, limit);
   const dr = dateRange(startDate, endDate);
-  const match = { isDeleted: { $ne: true } };
+  const match = { company: toObjId(companyId), isDeleted: { $ne: true } };
   if (dr) match.issueDate = dr;
 
   const data = await Invoice.aggregate([
@@ -289,29 +301,29 @@ exports.getSalesByCustomer = async ({ startDate, endDate, limit = 20 }) => {
       },
     },
     { $sort: { totalPurchases: -1 } },
-    { $limit: Math.min(Number(limit) || 20, 100) },
+    { $skip: skip },
+    { $limit: lim },
   ]);
 
-  return data;
+  return { data, page: p, limit: lim };
 };
 
 /**
  * Profit per sale — per-invoice profit calculation
  */
-exports.getProfitPerSale = async ({ startDate, endDate, page, limit }) => {
+exports.getProfitPerSale = async ({ companyId, startDate, endDate, page, limit }) => {
+  const { skip, limit: lim, page: p } = paginate(page, limit);
   const dr = dateRange(startDate, endDate);
-  const match = { isDeleted: { $ne: true } };
+  const match = { company: toObjId(companyId), isDeleted: { $ne: true } };
   if (dr) match.issueDate = dr;
-
-  const pag = paginate(page, limit);
 
   const total = await Invoice.countDocuments(match);
 
   const data = await Invoice.aggregate([
     { $match: match },
     { $sort: { issueDate: -1 } },
-    { $skip: pag.skip },
-    { $limit: pag.limit },
+    { $skip: skip },
+    { $limit: lim },
     { $unwind: '$items' },
     {
       $lookup: {
@@ -360,7 +372,7 @@ exports.getProfitPerSale = async ({ startDate, endDate, page, limit }) => {
     { $sort: { issueDate: -1 } },
   ]);
 
-  return { data, total, page: pag.page, limit: pag.limit };
+  return { data, total, page: p, limit: lim };
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -370,100 +382,25 @@ exports.getProfitPerSale = async ({ startDate, endDate, page, limit }) => {
 /**
  * Current stock levels with product info
  */
-exports.getCurrentStockLevels = async ({ page, limit, lowStockOnly = false }) => {
-  const pag = paginate(page, limit);
+exports.getStockLevels = async ({ companyId, threshold }) => {
+  const thr = threshold !== undefined ? Number(threshold) : null;
+  const baseMatch = { company: toObjId(companyId) };
+  if (thr !== null) baseMatch.quantity = { $lte: thr };
 
-  const pipeline = [
-    {
-      $lookup: {
-        from: 'products',
-        localField: 'product',
-        foreignField: '_id',
-        as: 'productInfo',
-      },
-    },
-    { $unwind: '$productInfo' },
-    {
-      $lookup: {
-        from: 'categories',
-        localField: 'productInfo.category',
-        foreignField: '_id',
-        as: 'cat',
-      },
-    },
-    {
-      $project: {
-        _id: 0,
-        stockId: '$_id',
-        productId: '$product',
-        productName: '$productInfo.name',
-        productCode: '$productInfo.productCode',
-        category: { $ifNull: [{ $arrayElemAt: ['$cat.name', 0] }, 'Uncategorized'] },
-        quantity: 1,
-        reorderLevel: '$productInfo.reorderLevel',
-        costPrice: '$productInfo.costPrice',
-        sellingPrice: '$productInfo.sellingPrice',
-        stockValue: { $round: [{ $multiply: ['$quantity', '$productInfo.costPrice'] }, 2] },
-        isLowStock: { $lte: ['$quantity', '$productInfo.reorderLevel'] },
-        expiryDate: 1,
-        lastStockUpdate: 1,
-      },
-    },
-  ];
-
-  if (lowStockOnly) {
-    pipeline.push({ $match: { isLowStock: true } });
-  }
-
-  // Count total
-  const countPipeline = [...pipeline, { $count: 'total' }];
-  const [countResult] = await Stock.aggregate(countPipeline);
-  const total = countResult?.total || 0;
-
-  // Summary stats
-  const [summaryResult] = await Stock.aggregate([
-    ...pipeline,
-    {
-      $group: {
-        _id: null,
-        totalProducts: { $sum: 1 },
-        totalStockValue: { $sum: '$stockValue' },
-        lowStockCount: { $sum: { $cond: ['$isLowStock', 1, 0] } },
-        outOfStockCount: { $sum: { $cond: [{ $eq: ['$quantity', 0] }, 1, 0] } },
-        avgQuantity: { $avg: '$quantity' },
-      },
-    },
-  ]);
-
-  pipeline.push({ $sort: { quantity: 1 } });
-  pipeline.push({ $skip: pag.skip });
-  pipeline.push({ $limit: pag.limit });
-
-  const data = await Stock.aggregate(pipeline);
-
-  return {
-    data,
-    summary: {
-      totalProducts: summaryResult?.totalProducts || 0,
-      totalStockValue: +(summaryResult?.totalStockValue || 0).toFixed(2),
-      lowStockCount: summaryResult?.lowStockCount || 0,
-      outOfStockCount: summaryResult?.outOfStockCount || 0,
-      avgQuantity: +(summaryResult?.avgQuantity || 0).toFixed(0),
-    },
-    total,
-    page: pag.page,
-    limit: pag.limit,
-  };
+  return Stock.find(baseMatch)
+    .populate('product', 'name productCode costPrice sellingPrice reorderLevel')
+    .lean();
 };
 
 /**
  * Stock movement history — IN (purchase received) / OUT (invoices sold)
  */
-exports.getStockMovementHistory = async ({ startDate, endDate, productId }) => {
+exports.getStockMovementHistory = async ({ companyId, startDate, endDate, productId }) => {
   const dr = dateRange(startDate, endDate);
+  const compObjId = toObjId(companyId);
 
   // OUT movements — from invoices
-  const invoiceMatch = { isDeleted: { $ne: true } };
+  const invoiceMatch = { company: compObjId, isDeleted: { $ne: true } };
   if (dr) invoiceMatch.issueDate = dr;
 
   const outMovements = await Invoice.aggregate([
@@ -487,7 +424,7 @@ exports.getStockMovementHistory = async ({ startDate, endDate, productId }) => {
   ]);
 
   // IN movements — from purchase orders that have been received
-  const poMatch = { isDeleted: { $ne: true }, status: { $in: ['received', 'partially_received'] } };
+  const poMatch = { company: compObjId, isDeleted: { $ne: true }, status: { $in: ['received', 'partially_received'] } };
   if (dr) poMatch.orderDate = dr;
 
   const inMovements = await PurchaseOrder.aggregate([
@@ -537,41 +474,31 @@ exports.getStockMovementHistory = async ({ startDate, endDate, productId }) => {
 /**
  * Dead stock — products with zero sales in period
  */
-exports.getDeadStock = async ({ startDate, endDate, limit = 50 }) => {
-  const dr = dateRange(startDate, endDate);
-  const match = { isDeleted: { $ne: true } };
-  if (dr) match.issueDate = dr;
+exports.getDeadStock = async ({ companyId, daysSinceLastSale = 90 }) => {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - daysSinceLastSale);
+  const compObjId = toObjId(companyId);
 
-  // Get all product IDs that HAVE sales
-  const soldProducts = await Invoice.aggregate([
-    { $match: match },
-    { $unwind: '$items' },
-    { $group: { _id: '$items.product' } },
-  ]);
-  const soldIds = soldProducts.map((p) => p._id);
+  const activelySold = await Transaction.distinct('items.product', {
+    company: compObjId,
+    type: 'invoice',
+    date: { $gte: cutoff },
+  });
 
-  // Get stock items whose product NOT in sold list
-  const deadStock = await Stock.find({ product: { $nin: soldIds }, quantity: { $gt: 0 } })
-    .populate('product', 'name productCode costPrice sellingPrice category')
-    .limit(Number(limit) || 50)
+  return Stock.find({
+    company: compObjId,
+    quantity: { $gt: 0 },
+    product: { $nin: activelySold },
+  })
+    .populate('product', 'name productCode sellingPrice costPrice')
     .lean();
-
-  return deadStock.map((s) => ({
-    productId: s.product?._id,
-    productName: s.product?.name || 'Unknown',
-    productCode: s.product?.productCode || 'N/A',
-    quantity: s.quantity,
-    stockValue: +((s.quantity * (s.product?.costPrice || 0)).toFixed(2)),
-    lastStockUpdate: s.lastStockUpdate,
-  }));
 };
 
 /**
  * Most used / sold products
  */
-exports.getMostUsedProducts = async ({ startDate, endDate, limit = 10 }) => {
-  // Re-use top selling
-  return exports.getTopSellingProducts({ startDate, endDate, limit, sortBy: 'quantity' });
+exports.getMostUsedProducts = async ({ companyId, startDate, endDate, limit = 10 }) => {
+  return exports.getTopProducts({ companyId, startDate, endDate, page: 1, limit });
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -581,14 +508,15 @@ exports.getMostUsedProducts = async ({ startDate, endDate, limit = 10 }) => {
 /**
  * Customer account statement — bank-statement style
  */
-exports.getCustomerStatement = async (customerId, { startDate, endDate }) => {
-  const customer = await Customer.findById(customerId).lean();
+exports.getCustomerStatement = async ({ companyId, customerId, startDate, endDate }) => {
+  const compObjId = toObjId(companyId);
+  const customer = await Customer.findOne({ _id: customerId, company: compObjId, isDeleted: { $ne: true } }).lean();
   if (!customer) return null;
 
   const dr = dateRange(startDate, endDate);
 
   // Get invoices
-  const invoiceMatch = { customer: new mongoose.Types.ObjectId(customerId), isDeleted: { $ne: true } };
+  const invoiceMatch = { customer: new mongoose.Types.ObjectId(customerId), company: compObjId, isDeleted: { $ne: true } };
   if (dr) invoiceMatch.issueDate = dr;
 
   const invoices = await Invoice.find(invoiceMatch)
@@ -597,7 +525,7 @@ exports.getCustomerStatement = async (customerId, { startDate, endDate }) => {
     .lean();
 
   // Get payments
-  const paymentMatch = { customer: new mongoose.Types.ObjectId(customerId) };
+  const paymentMatch = { customer: new mongoose.Types.ObjectId(customerId), company: compObjId };
   if (dr) paymentMatch.date = dr;
 
   const payments = await Payment.find(paymentMatch)
@@ -608,6 +536,7 @@ exports.getCustomerStatement = async (customerId, { startDate, endDate }) => {
   // Get returns
   const returnMatch = {
     customer: new mongoose.Types.ObjectId(customerId),
+    company: compObjId,
     isDeleted: false,
     status: { $ne: 'cancelled' },
   };
@@ -698,63 +627,15 @@ exports.getCustomerStatement = async (customerId, { startDate, endDate }) => {
 };
 
 /**
- * Top customers by purchases
- */
-exports.getTopCustomers = async ({ startDate, endDate, limit = 10 }) => {
-  return exports.getSalesByCustomer({ startDate, endDate, limit });
-};
-
-/**
  * Customer debt report — all customers with outstanding balances
  */
-exports.getCustomerDebtReport = async () => {
-  const data = await Customer.aggregate([
-    {
-      $lookup: {
-        from: 'invoices',
-        localField: '_id',
-        foreignField: 'customer',
-        as: 'invoices',
-      },
-    },
-    { $unwind: { path: '$invoices', preserveNullAndEmptyArrays: true } },
-    { $match: { 'invoices.isDeleted': { $ne: true } } },
-    {
-      $group: {
-        _id: '$_id',
-        name: { $first: '$name' },
-        email: { $first: '$email' },
-        phone: { $first: '$phone' },
-        totalPurchases: { $sum: '$invoices.totalAmount' },
-        totalPaid: { $sum: '$invoices.amountPaid' },
-        totalDue: { $sum: '$invoices.balanceDue' },
-        invoiceCount: { $sum: 1 },
-        overdueCount: {
-          $sum: {
-            $cond: [{ $eq: ['$invoices.status', 'overdue'] }, 1, 0],
-          },
-        },
-      },
-    },
-    { $match: { totalDue: { $gt: 0 } } },
-    {
-      $project: {
-        _id: 0,
-        customerId: '$_id',
-        name: 1,
-        email: 1,
-        phone: 1,
-        totalPurchases: { $round: ['$totalPurchases', 2] },
-        totalPaid: { $round: ['$totalPaid', 2] },
-        totalDue: { $round: ['$totalDue', 2] },
-        invoiceCount: 1,
-        overdueCount: 1,
-      },
-    },
-    { $sort: { totalDue: -1 } },
-  ]);
+exports.getCustomerDebt = async ({ companyId }) => {
+  const data = await Customer.find({ company: toObjId(companyId), isDeleted: { $ne: true }, outstandingBalance: { $gt: 0 } })
+    .select('name phone email outstandingBalance')
+    .sort('-outstandingBalance')
+    .lean();
 
-  const totalDebt = data.reduce((s, c) => s + c.totalDue, 0);
+  const totalDebt = data.reduce((s, c) => s + c.outstandingBalance, 0);
 
   return {
     data,
@@ -772,8 +653,9 @@ exports.getCustomerDebtReport = async () => {
 /**
  * Supplier account statement
  */
-exports.getSupplierStatement = async (supplierId, { startDate, endDate }) => {
-  const supplier = await Supplier.findById(supplierId).lean();
+exports.getSupplierStatement = async ({ companyId, supplierId, startDate, endDate }) => {
+  const compObjId = toObjId(companyId);
+  const supplier = await Supplier.findOne({ _id: supplierId, company: compObjId, isDeleted: { $ne: true } }).lean();
   if (!supplier) return null;
 
   const dr = dateRange(startDate, endDate);
@@ -867,9 +749,9 @@ exports.getSupplierStatement = async (supplierId, { startDate, endDate }) => {
 /**
  * Supplier outstanding balances
  */
-exports.getSupplierOutstandingBalances = async () => {
+exports.getSupplierOutstandingBalances = async ({ companyId }) => {
   const data = await PurchaseOrder.aggregate([
-    { $match: { isDeleted: { $ne: true }, balanceDue: { $gt: 0 } } },
+    { $match: { company: toObjId(companyId), isDeleted: { $ne: true }, balanceDue: { $gt: 0 } } },
     {
       $group: {
         _id: '$supplier',
@@ -918,11 +800,12 @@ exports.getSupplierOutstandingBalances = async () => {
 //  E) FINANCIAL SUMMARY
 // ═══════════════════════════════════════════════════════════
 
-exports.getFinancialSummary = async ({ startDate, endDate }) => {
+exports.getFinancialSummary = async ({ companyId, startDate, endDate }) => {
+  const compObjId = toObjId(companyId);
   const dr = dateRange(startDate, endDate);
 
   // Revenue from invoices
-  const invoiceMatch = { isDeleted: { $ne: true } };
+  const invoiceMatch = { company: compObjId, isDeleted: { $ne: true } };
   if (dr) invoiceMatch.issueDate = dr;
 
   const [revData] = await Invoice.aggregate([
@@ -939,7 +822,7 @@ exports.getFinancialSummary = async ({ startDate, endDate }) => {
   ]);
 
   // Expenses
-  const expenseMatch = { isDeleted: false, status: 'paid' };
+  const expenseMatch = { company: compObjId, isDeleted: { $ne: true }, status: 'paid' };
   if (dr) expenseMatch.date = dr;
 
   const [expData] = await Expense.aggregate([
@@ -975,7 +858,7 @@ exports.getFinancialSummary = async ({ startDate, endDate }) => {
   ]);
 
   // Purchases total
-  const poMatch = { isDeleted: { $ne: true } };
+  const poMatch = { company: compObjId, isDeleted: { $ne: true } };
   if (dr) poMatch.orderDate = dr;
 
   const [purchaseData] = await PurchaseOrder.aggregate([

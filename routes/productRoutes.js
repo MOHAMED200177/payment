@@ -1,14 +1,15 @@
+'use strict';
 const express = require('express');
-const router = express.Router();
+const router  = express.Router();
 const productController = require('../controllers/productController');
 
-router
-  .route('/')
+router.route('/')
   .get(productController.getAllProducts)
   .post(productController.createProduct);
 
-router
-  .route('/:id')
+router.post('/search', productController.getProductByName);
+
+router.route('/:id')
   .get(productController.getProduct)
   .patch(productController.updateProduct)
   .delete(productController.deleteProduct);

@@ -1,29 +1,23 @@
+'use strict';
 const express = require('express');
-const router = express.Router();
+const router  = express.Router();
 const purchaseOrderController = require('../controllers/purchaseOrderController');
+const purchaseReturnController = require('../controllers/purchaseReturnController');
 
-// ============================================================
-// Purchase Orders
-// ============================================================
-router
-  .route('/')
+router.post('/return', purchaseReturnController.processPurchaseReturn);
+
+router.route('/')
   .get(purchaseOrderController.getAllPurchaseOrders)
   .post(purchaseOrderController.createPurchaseOrder);
 
-router.route('/stats').get(purchaseOrderController.getPurchaseStats);
+router.get('/stats', purchaseOrderController.getPurchaseStats);
 
-router
-  .route('/:id')
+router.route('/:id')
   .get(purchaseOrderController.getOnePurchaseOrder)
   .delete(purchaseOrderController.deletePurchaseOrder);
 
-// ✅ Receive Items
-router.route('/:id/receive').patch(purchaseOrderController.receiveItems);
-
-// ✅ Supplier Payment
-router.route('/:id/payment').post(purchaseOrderController.addSupplierPayment);
-
-// ✅ Cancel Order
-router.route('/:id/cancel').patch(purchaseOrderController.cancelPurchaseOrder);
+router.patch('/:id/receive',  purchaseOrderController.receiveItems);
+router.post('/:id/payment',   purchaseOrderController.addSupplierPayment);
+router.patch('/:id/cancel',   purchaseOrderController.cancelPurchaseOrder);
 
 module.exports = router;

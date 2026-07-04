@@ -1,5 +1,15 @@
+'use strict';
 const mongoose = require('mongoose');
+const tenantPlugin = require('./tenantPlugin');
 
+/**
+ * CashTransaction — a ledger of all money moving in or out of the company.
+ * Every entry belongs to a specific company (multi-tenant).
+ * Created automatically when:
+ *   - An Expense is recorded
+ *   - An Invoice payment is collected
+ *   - A manual cash entry is added
+ */
 const cashTransactionSchema = new mongoose.Schema(
   {
     type: {
@@ -28,11 +38,12 @@ const cashTransactionSchema = new mongoose.Schema(
     amount: {
       type: Number,
       required: true,
-      min: [0, 'Amount cannot be negative'],
+      min: [0.01, 'Amount must be positive'],
     },
     description: {
       type: String,
       required: true,
+      trim: true,
     },
     referenceId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -56,20 +67,19 @@ const cashTransactionSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
-    createdBy: {
-      type: String,
-      default: 'System',
-    },
   },
   {
     timestamps: true,
   }
 );
 
-// ✅ Indexes
-cashTransactionSchema.index({ type: 1 });
-cashTransactionSchema.index({ category: 1 });
-cashTransactionSchema.index({ date: -1 });
-cashTransactionSchema.index({ referenceId: 1 });
+// Multi-tenant: every cash transaction belongs to a company
+cashTransactionSchema.plugin(tenantPlugin);
+
+// Indexes
+cashTransactionSchema.index({ company: 1, type: 1 });
+cashTransactionSchema.index({ company: 1, category: 1 });
+cashTransactionSchema.index({ company: 1, date: -1 });
+cashTransactionSchema.index({ company: 1, referenceId: 1 });
 
 module.exports = mongoose.model('CashTransaction', cashTransactionSchema);

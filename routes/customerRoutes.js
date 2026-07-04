@@ -1,30 +1,27 @@
+'use strict';
 const express = require('express');
 const router = express.Router();
 const customerController = require('../controllers/customerController');
-const exportController = require('../controllers/exportController');
+const exportController   = require('../controllers/exportController');
 
-// Get customer statement
-router.post('/statement', customerController.getCustomerStatement);
-router.post('/statement/file', exportController.fileCustomerStatement);
-router.get('/export/pdf', exportController.exportInvoicesToPDF);
-router.get('/export/excel', exportController.exportInvoicesToExcel);
+// Statement & export — POST because they accept date filter in body
+router.post('/statement',       customerController.getCustomerStatement);
+router.post('/statement/file',  exportController.fileCustomerStatement);
 
+// Invoice exports — POST (body carries { startDate, endDate })
+router.post('/export/pdf',      exportController.exportInvoicesToPDF);
+router.post('/export/excel',    exportController.exportInvoicesToExcel);
 
-router.
-    route('/')
-    .get(customerController.allCustomer)
-    .post(customerController.createCustomer);
-router.
-    route('/profile')
-    .post(customerController.oneCustomer)
+router.route('/')
+  .get(customerController.allCustomer)
+  .post(customerController.createCustomer);
 
-router.
-    route('/:id')
-    .get(customerController.oneCustomerId)
-    .patch(customerController.updateCustomer)
-    .delete(customerController.deleteCustomer);
+// Lookup customer by name (sent in body)
+router.post('/profile', customerController.oneCustomer);
 
-
-
+router.route('/:id')
+  .get(customerController.oneCustomerId)
+  .patch(customerController.updateCustomer)
+  .delete(customerController.deleteCustomer);
 
 module.exports = router;
