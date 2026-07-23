@@ -67,7 +67,7 @@ exports.stockLevels = catchAsync(async (req, res, next) => {
 
 exports.stockMovement = catchAsync(async (req, res, next) => {
   const { startDate, endDate, productId, page, limit } = req.query;
-  const data = await reportService.getStockMovement({ companyId: req.companyId, startDate, endDate, productId, page, limit });
+  const data = await reportService.getStockMovementHistory({ companyId: req.companyId, startDate, endDate, productId, page, limit });
   res.status(200).json({ status: 'success', data });
 });
 

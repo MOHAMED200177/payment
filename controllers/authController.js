@@ -93,22 +93,23 @@ exports.registerCompany = catchAsync(async (req, res, next) => {
 // ============================================================
 // Login
 // POST /auth/login
-// Body: { username, password, companySlug }
+// Body: { username, password, companyName }
 // ============================================================
 /**
- * Username-based login within a specific company (identified by slug).
+ * Username-based login within a specific company (identified by name).
  * Offline-friendly — no email required.
  */
 exports.login = catchAsync(async (req, res, next) => {
-  const { username, password, companySlug } = req.body;
+  const { username, password, companyName } = req.body;
 
-  if (!username || !password || !companySlug) {
-    return next(new AppError('username, password, and companySlug are required', 400));
+  if (!username || !password || !companyName) {
+    return next(new AppError('username, password, and companyName are required', 400));
   }
 
-  // Find company first
+  // Find company first (case-insensitive name match)
+  const escapedName = companyName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const company = await Company.findOne({
-    slug: companySlug.trim().toLowerCase(),
+    name: new RegExp('^' + escapedName + '$', 'i'),
     active: true,
   });
   if (!company) {
@@ -128,7 +129,7 @@ exports.login = catchAsync(async (req, res, next) => {
   }
 
   const token = signToken(user._id, company._id);
-  logger.info(`Login: ${user.username} @ ${company.slug}`);
+  logger.info(`Login: ${user.username} @ ${company.name}`);
 
   logAudit({
     req,
@@ -136,7 +137,7 @@ exports.login = catchAsync(async (req, res, next) => {
     module: 'AUTH',
     entityId: user._id,
     entityLabel: user.username,
-    newValues: { companySlug },
+    newValues: { companyName: company.name },
   });
 
   sendSuccess(res, 200, {

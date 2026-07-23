@@ -51,6 +51,7 @@ const companySchema = new mongoose.Schema(
 );
 
 companySchema.index({ slug: 1 }, { unique: true });
+companySchema.index({ name: 1 }, { unique: true, collation: { locale: 'en', strength: 2 } });
 companySchema.index({ active: 1 });
 
 // Auto-generate slug from name before first save

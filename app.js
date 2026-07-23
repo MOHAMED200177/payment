@@ -66,8 +66,8 @@ app.get('/health', (req, res) => {
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openapi));
 
 const authRoutes = require('./routes/auth.routes');
-const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
-app.use('/auth', authLimiter, authRoutes);
+// const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
+app.use('/auth', authRoutes);
 
 // ─── ERP protected routes ─────────────────────────────────────
 // Every ERP route goes through:

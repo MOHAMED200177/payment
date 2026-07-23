@@ -92,10 +92,13 @@ const processInvoiceItems = (items, productMap, stockMap) => {
     if (stock.quantity < item.quantity)
       throw new AppError(`Insufficient stock for ${product.name}. Available: ${stock.quantity}`, 400);
 
-    const lineTotal = product.sellingPrice * item.quantity;
+    const unitPrice = (item.unitPrice !== undefined && item.unitPrice !== null) ? Number(item.unitPrice) : product.sellingPrice;
+    if (isNaN(unitPrice) || unitPrice < 0) throw new AppError(`Invalid unit price for product: ${item.product}`, 400);
+
+    const lineTotal = unitPrice * item.quantity;
     subtotal += lineTotal;
 
-    processedItems.push({ product: product._id, quantity: item.quantity, unitPrice: product.sellingPrice, taxRate: product.taxes || 0, lineTotal });
+    processedItems.push({ product: product._id, quantity: item.quantity, unitPrice, taxRate: product.taxes || 0, lineTotal });
     stockUpdates.push({ updateOne: { filter: { _id: stock._id }, update: { $inc: { quantity: -item.quantity }, $set: { lastStockUpdate: new Date() } } } });
   }
 

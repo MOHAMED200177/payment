@@ -5,8 +5,9 @@ const customerController = require('../controllers/customerController');
 const exportController   = require('../controllers/exportController');
 
 // Statement & export — POST because they accept date filter in body
-router.post('/statement',       customerController.getCustomerStatement);
-router.post('/statement/file',  exportController.fileCustomerStatement);
+router.post('/statement',           customerController.getCustomerStatement);
+router.post('/statement/file',      exportController.fileCustomerStatement);
+router.post('/statement/pdf',       exportController.pdfCustomerStatement);
 
 // Invoice exports — POST (body carries { startDate, endDate })
 router.post('/export/pdf',      exportController.exportInvoicesToPDF);

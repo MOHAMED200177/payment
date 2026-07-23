@@ -308,6 +308,10 @@ exports.getSalesByCustomer = async ({ companyId, startDate, endDate, page, limit
   return { data, page: p, limit: lim };
 };
 
+exports.getTopCustomers = async (params) => {
+  return exports.getSalesByCustomer(params);
+};
+
 /**
  * Profit per sale — per-invoice profit calculation
  */
@@ -506,7 +510,7 @@ exports.getMostUsedProducts = async ({ companyId, startDate, endDate, limit = 10
 // ═══════════════════════════════════════════════════════════
 
 /**
- * Customer account statement — bank-statement style
+ * Customer account statement — accounting-accurate ledger
  */
 exports.getCustomerStatement = async ({ companyId, customerId, startDate, endDate }) => {
   const compObjId = toObjId(companyId);
@@ -515,87 +519,147 @@ exports.getCustomerStatement = async ({ companyId, customerId, startDate, endDat
 
   const dr = dateRange(startDate, endDate);
 
-  // Get invoices
+  // Get invoices with full item details
   const invoiceMatch = { customer: new mongoose.Types.ObjectId(customerId), company: compObjId, isDeleted: { $ne: true } };
   if (dr) invoiceMatch.issueDate = dr;
-
   const invoices = await Invoice.find(invoiceMatch)
-    .select('invoiceNumber issueDate totalAmount status')
+    .populate({ path: 'items.product', select: 'name productCode unit' })
+    .select('invoiceNumber issueDate dueDate totalAmount subtotal discountAmount taxAmount amountPaid balanceDue status items notes')
     .sort('issueDate')
     .lean();
 
-  // Get payments
+  // Get payments linked to invoices
   const paymentMatch = { customer: new mongoose.Types.ObjectId(customerId), company: compObjId };
   if (dr) paymentMatch.date = dr;
-
   const payments = await Payment.find(paymentMatch)
-    .select('amount method date status invoice')
+    .populate({ path: 'invoice', select: 'invoiceNumber' })
+    .select('amount method date status invoice notes')
     .sort('date')
     .lean();
 
-  // Get returns
+  // Get returns with product and invoice details
   const returnMatch = {
     customer: new mongoose.Types.ObjectId(customerId),
     company: compObjId,
-    isDeleted: false,
+    isDeleted: { $ne: true },
     status: { $ne: 'cancelled' },
   };
   if (dr) returnMatch.date = dr;
-
   const returns = await Return.find(returnMatch)
-    .select('refundAmount date invoice quantity')
+    .populate({ path: 'product', select: 'name productCode unit' })
+    .populate({ path: 'invoice', select: 'invoiceNumber' })
+    .select('refundAmount date invoice product quantity reason status')
     .sort('date')
     .lean();
 
-  // Build statement entries
+  // Calculate opening balance (transactions before startDate if filter applied)
+  let openingBalance = 0;
+  if (dr && dr.$gte) {
+    const beforeStart = { customer: new mongoose.Types.ObjectId(customerId), company: compObjId };
+    const [priorInvoices, priorPayments, priorReturns] = await Promise.all([
+      Invoice.find({ ...beforeStart, issueDate: { $lt: dr.$gte }, isDeleted: { $ne: true } }).select('totalAmount').lean(),
+      Payment.find({ ...beforeStart, date: { $lt: dr.$gte }, status: { $ne: 'Failed' } }).select('amount').lean(),
+      Return.find({ ...beforeStart, date: { $lt: dr.$gte }, isDeleted: { $ne: true }, status: { $ne: 'cancelled' } }).select('refundAmount').lean(),
+    ]);
+    const priorDebit = priorInvoices.reduce((s, i) => s + i.totalAmount, 0);
+    const priorCredit = priorPayments.reduce((s, p) => s + p.amount, 0) + priorReturns.reduce((s, r) => s + r.refundAmount, 0);
+    openingBalance = +(priorDebit - priorCredit).toFixed(2);
+  }
+
+  // Build accounting ledger entries
   const entries = [];
 
   invoices.forEach((inv) => {
+    const invRef = `INV-${String(inv.invoiceNumber).padStart(6, '0')}`;
     entries.push({
       date: inv.issueDate,
-      type: 'invoice',
-      reference: `INV-${String(inv.invoiceNumber).padStart(6, '0')}`,
+      type: 'Sales Invoice',
+      typeKey: 'invoice',
+      reference: invRef,
       referenceId: inv._id,
-      description: `Invoice ${inv.invoiceNumber}`,
+      description: `Sales Invoice ${invRef}${inv.notes ? ` — ${inv.notes}` : ''}`,
+      invoiceNumber: invRef,
+      paymentRef: null,
+      // Invoice = DEBIT (customer owes)
       debit: inv.totalAmount,
       credit: 0,
       status: inv.status,
+      subtotal: inv.subtotal,
+      discountAmount: inv.discountAmount || 0,
+      taxAmount: inv.taxAmount || 0,
+      items: (inv.items || []).map((item) => ({
+        productName: item.product?.name || 'Unknown',
+        productCode: item.product?.productCode || '',
+        unit: item.product?.unit || '',
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        lineTotal: item.lineTotal,
+        taxRate: item.taxRate || 0,
+      })),
     });
   });
 
   payments.forEach((pay) => {
-    if (pay.status !== 'Failed') {
-      entries.push({
-        date: pay.date,
-        type: 'payment',
-        reference: pay.invoice ? `PAY-${String(pay._id).slice(-6)}` : `PAY-${String(pay._id).slice(-6)}`,
-        referenceId: pay._id,
-        description: `Payment via ${pay.method || 'Cash'}`,
-        debit: 0,
-        credit: pay.amount,
-        status: pay.status,
-      });
-    }
-  });
-
-  returns.forEach((ret) => {
+    if (pay.status === 'Failed') return;
+    const payRef = `PAY-${String(pay._id).slice(-8).toUpperCase()}`;
+    const invRef = pay.invoice ? `INV-${String(pay.invoice.invoiceNumber).padStart(6, '0')}` : null;
     entries.push({
-      date: ret.date,
-      type: 'return',
-      reference: `RET-${String(ret._id).slice(-6)}`,
-      referenceId: ret._id,
-      description: `Return/Refund`,
+      date: pay.date,
+      type: 'Payment Received',
+      typeKey: 'payment',
+      reference: payRef,
+      referenceId: pay._id,
+      description: `Payment received via ${pay.method || 'Cash'}${invRef ? ` for ${invRef}` : ''}${pay.notes ? ` — ${pay.notes}` : ''}`,
+      invoiceNumber: invRef,
+      paymentRef: payRef,
+      method: pay.method || 'Cash',
+      // Payment = CREDIT (customer pays debt)
       debit: 0,
-      credit: ret.refundAmount,
-      status: 'processed',
+      credit: pay.amount,
+      status: pay.status,
+      items: [],
     });
   });
 
-  // Sort chronologically
-  entries.sort((a, b) => new Date(a.date) - new Date(b.date));
+  returns.forEach((ret) => {
+    const retRef = `RET-${String(ret._id).slice(-8).toUpperCase()}`;
+    const invRef = ret.invoice ? `INV-${String(ret.invoice.invoiceNumber).padStart(6, '0')}` : null;
+    const productName = ret.product?.name || 'Unknown';
+    entries.push({
+      date: ret.date,
+      type: 'Sales Return',
+      typeKey: 'return',
+      reference: retRef,
+      referenceId: ret._id,
+      description: `Sales return — ${productName} (Qty: ${ret.quantity})${invRef ? ` from ${invRef}` : ''}${ret.reason ? ` — Reason: ${ret.reason}` : ''}`,
+      invoiceNumber: invRef,
+      paymentRef: null,
+      // Return = CREDIT (reduces customer's debt)
+      debit: 0,
+      credit: ret.refundAmount,
+      status: ret.status,
+      items: [{
+        productName,
+        productCode: ret.product?.productCode || '',
+        unit: ret.product?.unit || '',
+        quantity: ret.quantity,
+        unitPrice: ret.quantity > 0 ? +(ret.refundAmount / ret.quantity).toFixed(2) : 0,
+        lineTotal: ret.refundAmount,
+        taxRate: 0,
+      }],
+    });
+  });
 
-  // Calculate running balance
-  let runningBalance = 0;
+  // Sort chronologically; within same timestamp, invoices before payments before returns
+  const typeOrder = { invoice: 1, payment: 2, return: 3 };
+  entries.sort((a, b) => {
+    const dateDiff = new Date(a.date) - new Date(b.date);
+    if (dateDiff !== 0) return dateDiff;
+    return (typeOrder[a.typeKey] || 9) - (typeOrder[b.typeKey] || 9);
+  });
+
+  // Compute running balance starting from opening balance
+  let runningBalance = openingBalance;
   entries.forEach((entry) => {
     runningBalance += entry.debit - entry.credit;
     entry.balance = +runningBalance.toFixed(2);
@@ -603,8 +667,9 @@ exports.getCustomerStatement = async ({ companyId, customerId, startDate, endDat
     entry.credit = +entry.credit.toFixed(2);
   });
 
-  const totalDebit = entries.reduce((s, e) => s + e.debit, 0);
-  const totalCredit = entries.reduce((s, e) => s + e.credit, 0);
+  const totalDebit = +entries.reduce((s, e) => s + e.debit, 0).toFixed(2);
+  const totalCredit = +entries.reduce((s, e) => s + e.credit, 0).toFixed(2);
+  const closingBalance = +(openingBalance + totalDebit - totalCredit).toFixed(2);
 
   return {
     customer: {
@@ -614,12 +679,19 @@ exports.getCustomerStatement = async ({ companyId, customerId, startDate, endDat
       phone: customer.phone,
       address: customer.address || null,
     },
+    period: {
+      startDate: dr?.$gte || null,
+      endDate: dr?.$lte || null,
+      generatedAt: new Date(),
+    },
     summary: {
-      totalDebit: +totalDebit.toFixed(2),
-      totalCredit: +totalCredit.toFixed(2),
-      balance: +(totalDebit - totalCredit).toFixed(2),
+      openingBalance: +openingBalance.toFixed(2),
+      totalDebit,
+      totalCredit,
+      closingBalance,
+      outstandingBalance: +(customer.outstandingBalance || 0).toFixed(2),
       totalInvoices: invoices.length,
-      totalPayments: payments.length,
+      totalPayments: payments.filter(p => p.status !== 'Failed').length,
       totalReturns: returns.length,
     },
     entries,
